@@ -160,7 +160,7 @@ function ChartCard({ chart, index }: { chart: ChartData; index: number }) {
       </div>
       
       <div className="h-64">
-        {chart.type === 'bar' && (
+        {chart.type === 'bar' && chart.yKey && (
           <ResponsiveContainer width="100%" height="100%">
             <BarChart data={chart.data}>
               <CartesianGrid strokeDasharray="3 3" />
@@ -171,7 +171,7 @@ function ChartCard({ chart, index }: { chart: ChartData; index: number }) {
             </BarChart>
           </ResponsiveContainer>
         )}
-        {chart.type === 'pie' && (
+        {chart.type === 'pie' && chart.valueKey && (
           <ResponsiveContainer width="100%" height="100%">
             <PieChart>
               <Pie
@@ -193,7 +193,7 @@ function ChartCard({ chart, index }: { chart: ChartData; index: number }) {
             </PieChart>
           </ResponsiveContainer>
         )}
-        {chart.type === 'line' && (
+        {chart.type === 'line' && chart.yKey && (
           <ResponsiveContainer width="100%" height="100%">
             <LineChart data={chart.data}>
               <CartesianGrid strokeDasharray="3 3" />
