@@ -1,13 +1,12 @@
 'use client';
 
 import { useState, useRef, useCallback } from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Badge } from '@/components/ui/badge';
-import { Separator } from '@/components/ui/separator';
 import { 
   Upload, 
   Send, 
@@ -17,7 +16,9 @@ import {
   User, 
   Sparkles,
   Loader2,
-  BarChart3
+  BarChart3,
+  ChevronDown,
+  MessageSquare
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import DataVisualization from '@/components/DataVisualization';
@@ -39,7 +40,7 @@ export default function DataAnalystPage() {
   const [messages, setMessages] = useState<Message[]>([
     {
       role: 'assistant',
-      content: '你好！我是你的 AI 数据分析助手。\n\n请上传 Excel 文件，我会帮你：\n1. 自动分析数据结构\n2. 生成分析框架建议\n3. 通过对话深入分析\n\n支持同时上传多个文件进行对比分析。',
+      content: '你好！我是你的 AI 数据分析助手。\n\n请上传 Excel 文件，我会帮你自动分析数据并生成可视化图表。',
       type: 'text'
     }
   ]);
@@ -47,7 +48,13 @@ export default function DataAnalystPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [selectedModel, setSelectedModel] = useState<'deepseek' | 'kimi'>('deepseek');
   const [analysisResult, setAnalysisResult] = useState<any>(null);
+  const [showModelSelect, setShowModelSelect] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  const scrollToBottom = () => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  };
 
   const handleFileUpload = useCallback((event: React.ChangeEvent<HTMLInputElement>) => {
     const uploadedFiles = event.target.files;
@@ -68,11 +75,13 @@ export default function DataAnalystPage() {
           const worksheet = workbook.Sheets[sheetName];
           const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
 
-          setFiles(prev => [...prev, {
+          const newFile = {
             name: file.name,
             data: jsonData as any[][],
             size: file.size
-          }]);
+          };
+
+          setFiles(prev => [...prev, newFile]);
 
           setMessages(prev => [...prev, {
             role: 'assistant',
@@ -81,7 +90,7 @@ export default function DataAnalystPage() {
           }]);
 
           // 自动分析文件
-          analyzeFiles([...files, { name: file.name, data: jsonData as any[][], size: file.size }]);
+          analyzeFiles([...files, newFile]);
         } catch (error) {
           console.error('File parsing error:', error);
           alert('文件解析失败，请检查文件格式');
@@ -90,7 +99,6 @@ export default function DataAnalystPage() {
       reader.readAsBinaryString(file);
     });
 
-    // 清空 input
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
     }
@@ -120,7 +128,6 @@ export default function DataAnalystPage() {
           type: 'analysis'
         }]);
       } else {
-        // 显示后端返回的错误信息
         setMessages(prev => [...prev, {
           role: 'assistant',
           content: `分析失败：${result.error || '未知错误'}`,
@@ -136,6 +143,7 @@ export default function DataAnalystPage() {
       }]);
     } finally {
       setIsLoading(false);
+      setTimeout(scrollToBottom, 100);
     }
   };
 
@@ -179,6 +187,7 @@ export default function DataAnalystPage() {
       }]);
     } finally {
       setIsLoading(false);
+      setTimeout(scrollToBottom, 100);
     }
   };
 
@@ -187,125 +196,75 @@ export default function DataAnalystPage() {
   };
 
   return (
-    <div className="flex h-screen bg-gray-50">
-      {/* 左侧边栏 - 文件上传 */}
-      <div className="w-80 bg-white border-r border-gray-200 flex flex-col">
+    <div className="flex h-screen bg-gray-100">
+      {/* 左侧 - AI 对话区域 */}
+      <div className="w-96 bg-white border-r border-gray-200 flex flex-col">
+        {/* 顶部 - 模型选择 */}
         <div className="p-4 border-b border-gray-200">
-          <h1 className="text-xl font-bold flex items-center gap-2">
-            <BarChart3 className="w-6 h-6 text-blue-600" />
-            AI 数据分析助手
-          </h1>
-          <p className="text-sm text-gray-500 mt-1">智能分析 · 自然语言交互</p>
+          <div className="relative">
+            <button
+              onClick={() => setShowModelSelect(!showModelSelect)}
+              className="w-full flex items-center justify-between px-4 py-2 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors"
+            >
+              <div className="flex items-center gap-2">
+                <Sparkles className="w-4 h-4 text-blue-600" />
+                <span className="font-medium">
+                  {selectedModel === 'deepseek' ? 'DeepSeek' : 'Kimi'}
+                </span>
+              </div>
+              <ChevronDown className={`w-4 h-4 transition-transform ${showModelSelect ? 'rotate-180' : ''}`} />
+            </button>
+            
+            {showModelSelect && (
+              <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-lg shadow-lg z-10">
+                <button
+                  onClick={() => { setSelectedModel('deepseek'); setShowModelSelect(false); }}
+                  className={`w-full px-4 py-2 text-left hover:bg-gray-50 flex items-center gap-2 ${selectedModel === 'deepseek' ? 'bg-blue-50 text-blue-600' : ''}`}
+                >
+                  <Sparkles className="w-4 h-4" />
+                  DeepSeek
+                </button>
+                <button
+                  onClick={() => { setSelectedModel('kimi'); setShowModelSelect(false); }}
+                  className={`w-full px-4 py-2 text-left hover:bg-gray-50 flex items-center gap-2 ${selectedModel === 'kimi' ? 'bg-blue-50 text-blue-600' : ''}`}
+                >
+                  <Sparkles className="w-4 h-4" />
+                  Kimi
+                </button>
+              </div>
+            )}
+          </div>
         </div>
 
-        <div className="p-4 flex-1 overflow-auto">
-          {/* AI 模型选择 */}
-          <div className="mb-4">
-            <label className="text-sm font-medium text-gray-700 mb-2 block">选择 AI 模型</label>
-            <div className="flex gap-2">
-              <Button
-                variant={selectedModel === 'deepseek' ? 'default' : 'outline'}
-                size="sm"
-                onClick={() => setSelectedModel('deepseek')}
-                className="flex-1"
-              >
-                DeepSeek
-              </Button>
-              <Button
-                variant={selectedModel === 'kimi' ? 'default' : 'outline'}
-                size="sm"
-                onClick={() => setSelectedModel('kimi')}
-                className="flex-1"
-              >
-                Kimi
-              </Button>
+        {/* 已上传文件列表 */}
+        {files.length > 0 && (
+          <div className="px-4 py-2 border-b border-gray-200">
+            <div className="flex items-center gap-2 mb-2 text-sm text-gray-600">
+              <FileSpreadsheet className="w-4 h-4" />
+              <span>已上传文件</span>
             </div>
-          </div>
-
-          <Separator className="my-4" />
-
-          {/* 文件上传 */}
-          <div className="mb-4">
-            <label className="text-sm font-medium text-gray-700 mb-2 block">上传数据文件</label>
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept=".xlsx,.xls"
-              multiple
-              onChange={handleFileUpload}
-              className="hidden"
-            />
-            <Button
-              variant="outline"
-              className="w-full h-24 border-dashed"
-              onClick={() => fileInputRef.current?.click()}
-              disabled={isLoading}
-            >
-              <div className="flex flex-col items-center gap-2">
-                <Upload className="w-6 h-6 text-gray-400" />
-                <span className="text-sm text-gray-500">点击或拖拽上传 Excel</span>
-              </div>
-            </Button>
-          </div>
-
-          {/* 已上传文件列表 */}
-          {files.length > 0 && (
             <div className="space-y-2">
-              <label className="text-sm font-medium text-gray-700">已上传文件</label>
               {files.map((file, index) => (
-                <Card key={index} className="bg-gray-50">
-                  <CardContent className="p-3 flex items-center justify-between">
-                    <div className="flex items-center gap-2 overflow-hidden">
-                      <FileSpreadsheet className="w-4 h-4 text-green-600 flex-shrink-0" />
-                      <span className="text-sm truncate">{file.name}</span>
-                    </div>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="h-6 w-6 p-0 flex-shrink-0"
-                      onClick={() => removeFile(index)}
-                    >
-                      <X className="w-4 h-4" />
-                    </Button>
-                  </CardContent>
-                </Card>
-              ))}
-            </div>
-          )}
-
-          {/* 数据概览 */}
-          {analysisResult?.fileAnalyses && (
-            <div className="mt-4">
-              <label className="text-sm font-medium text-gray-700 mb-2 block">数据概览</label>
-              {analysisResult.fileAnalyses.map((analysis: any, index: number) => (
-                <div key={index}>
-                  <Card className="mb-2 bg-blue-50">
-                    <CardContent className="p-3">
-                      <p className="text-sm font-medium">{analysis.fileName}</p>
-                      <p className="text-xs text-gray-600 mt-1">
-                        {analysis.rowCount} 行 × {analysis.columnCount} 列
-                      </p>
-                    </CardContent>
-                  </Card>
-                  {/* 数据可视化 */}
-                  {files[index]?.data && (
-                    <DataVisualization 
-                      data={files[index].data} 
-                      fileName={analysis.fileName}
-                    />
-                  )}
+                <div key={index} className="flex items-center justify-between bg-blue-50 px-3 py-2 rounded-lg">
+                  <div className="flex items-center gap-2 overflow-hidden">
+                    <FileSpreadsheet className="w-4 h-4 text-blue-600 flex-shrink-0" />
+                    <span className="text-sm truncate">{file.name}</span>
+                  </div>
+                  <button
+                    onClick={() => removeFile(index)}
+                    className="text-gray-400 hover:text-red-500 flex-shrink-0"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
                 </div>
               ))}
             </div>
-          )}
-        </div>
-      </div>
+          </div>
+        )}
 
-      {/* 右侧聊天区域 */}
-      <div className="flex-1 flex flex-col">
         {/* 消息列表 */}
         <ScrollArea className="flex-1 p-4">
-          <div className="space-y-4 max-w-4xl mx-auto">
+          <div className="space-y-4">
             {messages.map((message, index) => (
               <div
                 key={index}
@@ -317,7 +276,7 @@ export default function DataAnalystPage() {
                   </AvatarFallback>
                 </Avatar>
                 <div className={`max-w-[80%] ${message.role === 'user' ? 'text-right' : ''}`}>
-                  <Card className={`${message.role === 'user' ? 'bg-blue-600 text-white' : 'bg-white'}`}>
+                  <Card className={`${message.role === 'user' ? 'bg-blue-600 text-white' : 'bg-gray-100'}`}>
                     <CardContent className="p-3">
                       {message.type === 'analysis' && (
                         <Badge className="mb-2 bg-purple-100 text-purple-800">
@@ -338,7 +297,7 @@ export default function DataAnalystPage() {
                 <Avatar className="bg-blue-600">
                   <AvatarFallback><Bot className="w-4 h-4 text-white" /></AvatarFallback>
                 </Avatar>
-                <Card className="bg-white">
+                <Card className="bg-gray-100">
                   <CardContent className="p-3 flex items-center gap-2">
                     <Loader2 className="w-4 h-4 animate-spin" />
                     <span className="text-sm text-gray-500">AI 思考中...</span>
@@ -346,17 +305,18 @@ export default function DataAnalystPage() {
                 </Card>
               </div>
             )}
+            <div ref={messagesEndRef} />
           </div>
         </ScrollArea>
 
-        {/* 输入区域 */}
-        <div className="p-4 border-t border-gray-200 bg-white">
-          <div className="max-w-4xl mx-auto flex gap-2">
+        {/* 底部输入区域 */}
+        <div className="p-4 border-t border-gray-200">
+          <div className="relative">
             <Textarea
               value={input}
               onChange={(e) => setInput(e.target.value)}
-              placeholder="输入你的分析需求，例如：帮我分析会员消费趋势..."
-              className="flex-1 min-h-[60px] resize-none"
+              placeholder="输入你的分析需求..."
+              className="min-h-[80px] pr-12 resize-none"
               onKeyDown={(e) => {
                 if (e.key === 'Enter' && !e.shiftKey) {
                   e.preventDefault();
@@ -365,18 +325,73 @@ export default function DataAnalystPage() {
               }}
               disabled={isLoading}
             />
-            <Button
+            <div className="absolute bottom-2 left-2 flex gap-2">
+              {/* 上传文件按钮 */}
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept=".xlsx,.xls"
+                multiple
+                onChange={handleFileUpload}
+                className="hidden"
+              />
+              <button
+                onClick={() => fileInputRef.current?.click()}
+                className="p-2 text-gray-400 hover:text-blue-600 transition-colors"
+                title="上传文件"
+              >
+                <Upload className="w-5 h-5" />
+              </button>
+            </div>
+            <button
               onClick={handleSendMessage}
               disabled={!input.trim() || isLoading}
-              className="h-auto px-4"
+              className="absolute bottom-2 right-2 p-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
             >
               <Send className="w-4 h-4" />
-            </Button>
+            </button>
           </div>
           <p className="text-xs text-gray-400 mt-2 text-center">
             按 Enter 发送，Shift + Enter 换行
           </p>
         </div>
+      </div>
+
+      {/* 右侧 - 数据可视化区域 */}
+      <div className="flex-1 flex flex-col bg-gray-50">
+        {/* 顶部标题 */}
+        <div className="bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <BarChart3 className="w-6 h-6 text-blue-600" />
+            <h1 className="text-xl font-semibold">数据分析结果</h1>
+          </div>
+          {files.length > 0 && (
+            <Badge variant="secondary" className="text-sm">
+              {files.length} 个文件已分析
+            </Badge>
+          )}
+        </div>
+
+        {/* 可视化内容 */}
+        <ScrollArea className="flex-1 p-6">
+          {files.length === 0 ? (
+            <div className="flex flex-col items-center justify-center h-full text-gray-400">
+              <BarChart3 className="w-16 h-16 mb-4" />
+              <p className="text-lg">上传 Excel 文件开始分析</p>
+              <p className="text-sm mt-2">支持 .xlsx 和 .xls 格式</p>
+            </div>
+          ) : (
+            <div className="space-y-6 max-w-6xl mx-auto">
+              {files.map((file, index) => (
+                <DataVisualization 
+                  key={index}
+                  data={file.data} 
+                  fileName={file.name}
+                />
+              ))}
+            </div>
+          )}
+        </ScrollArea>
       </div>
     </div>
   );
