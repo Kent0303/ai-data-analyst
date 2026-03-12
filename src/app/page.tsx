@@ -387,9 +387,10 @@ export default function DataAnalystPage() {
           ) : (
             <div className="space-y-6 max-w-6xl mx-auto">
               {/* AI 分析报告 */}
-              {aiReport && (
+              {aiReport && files.length > 0 && (
                 <AIReportView 
-                  report={aiReport} 
+                  report={aiReport}
+                  data={files[0]?.data || []}
                   onClear={() => setAiReport('')}
                 />
               )}
