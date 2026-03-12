@@ -118,12 +118,19 @@ export default function DataAnalystPage() {
           content: result.suggestions,
           type: 'analysis'
         }]);
+      } else {
+        // 显示后端返回的错误信息
+        setMessages(prev => [...prev, {
+          role: 'assistant',
+          content: `分析失败：${result.error || '未知错误'}`,
+          type: 'text'
+        }]);
       }
     } catch (error) {
       console.error('Analysis error:', error);
       setMessages(prev => [...prev, {
         role: 'assistant',
-        content: '分析过程中出现错误，请稍后重试。',
+        content: `分析过程中出现错误：${error instanceof Error ? error.message : '网络请求失败'}`,
         type: 'text'
       }]);
     } finally {
