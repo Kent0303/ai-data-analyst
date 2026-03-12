@@ -160,8 +160,8 @@ function ChartCard({ chart, index }: { chart: ChartData; index: number }) {
       </div>
       
       <div className="h-64">
-        <ResponsiveContainer width="100%" height="100%">
-          {chart.type === 'bar' && (
+        {chart.type === 'bar' && (
+          <ResponsiveContainer width="100%" height="100%">
             <BarChart data={chart.data}>
               <CartesianGrid strokeDasharray="3 3" />
               <XAxis dataKey={chart.xKey} tick={{ fontSize: 12 }} />
@@ -169,8 +169,10 @@ function ChartCard({ chart, index }: { chart: ChartData; index: number }) {
               <Tooltip />
               <Bar dataKey={chart.yKey} fill={COLORS[index % COLORS.length]} radius={[4, 4, 0, 0]} />
             </BarChart>
-          )}
-          {chart.type === 'pie' && (
+          </ResponsiveContainer>
+        )}
+        {chart.type === 'pie' && (
+          <ResponsiveContainer width="100%" height="100%">
             <PieChart>
               <Pie
                 data={chart.data}
@@ -189,8 +191,10 @@ function ChartCard({ chart, index }: { chart: ChartData; index: number }) {
               <Tooltip />
               <Legend />
             </PieChart>
-          )}
-          {chart.type === 'line' && (
+          </ResponsiveContainer>
+        )}
+        {chart.type === 'line' && (
+          <ResponsiveContainer width="100%" height="100%">
             <LineChart data={chart.data}>
               <CartesianGrid strokeDasharray="3 3" />
               <XAxis dataKey={chart.xKey} tick={{ fontSize: 12 }} />
@@ -204,8 +208,8 @@ function ChartCard({ chart, index }: { chart: ChartData; index: number }) {
                 dot={{ fill: COLORS[index % COLORS.length] }}
               />
             </LineChart>
-          )}
-        </ResponsiveContainer>
+          </ResponsiveContainer>
+        )}
       </div>
     </div>
   );
