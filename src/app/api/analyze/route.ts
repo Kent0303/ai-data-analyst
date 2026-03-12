@@ -23,13 +23,13 @@ function generateLocalSuggestions(fileAnalyses: FileAnalysis[]): string {
     const categoryCols = analysis.columns.filter(c => c.type === 'string' && c.uniqueCount <= 20);
     
     if (numericCols.length > 0) {
-      suggestions += `- 数值分析：${numericCols.map(c => c.header).join('、')} 的统计分布\n`;
+      suggestions += `- 数值分析：${numericCols.map(c => c.name).join('、')} 的统计分布\n`;
     }
     if (dateCols.length > 0) {
-      suggestions += `- 时间趋势：${dateCols.map(c => c.header).join('、')} 的变化趋势\n`;
+      suggestions += `- 时间趋势：${dateCols.map(c => c.name).join('、')} 的变化趋势\n`;
     }
     if (categoryCols.length > 0) {
-      suggestions += `- 分类对比：${categoryCols.map(c => c.header).join('、')} 的分布情况\n`;
+      suggestions += `- 分类对比：${categoryCols.map(c => c.name).join('、')} 的分布情况\n`;
     }
     
     suggestions += '\n---\n\n';
