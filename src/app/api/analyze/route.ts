@@ -28,8 +28,9 @@ export async function POST(request: Request) {
 
   } catch (error) {
     console.error('Analysis error:', error);
+    const errorMessage = error instanceof Error ? error.message : '分析过程中出现错误';
     return NextResponse.json(
-      { error: '分析过程中出现错误' },
+      { error: errorMessage, success: false },
       { status: 500 }
     );
   }
