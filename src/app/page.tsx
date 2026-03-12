@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useRef, useCallback } from 'react';
-import { Card, CardContent } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
@@ -48,6 +48,7 @@ export default function DataAnalystPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [selectedModel, setSelectedModel] = useState<'deepseek' | 'kimi'>('deepseek');
   const [analysisResult, setAnalysisResult] = useState<any>(null);
+  const [aiReport, setAiReport] = useState<string>('');
   const [showModelSelect, setShowModelSelect] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -177,6 +178,8 @@ export default function DataAnalystPage() {
           content: result.response,
           type: 'text'
         }]);
+        // 将 AI 回复的报告显示在右侧
+        setAiReport(result.response);
       }
     } catch (error) {
       console.error('Chat error:', error);
@@ -374,7 +377,7 @@ export default function DataAnalystPage() {
 
         {/* 可视化内容 */}
         <ScrollArea className="flex-1 p-6">
-          {files.length === 0 ? (
+          {files.length === 0 && !aiReport ? (
             <div className="flex flex-col items-center justify-center h-full text-gray-400">
               <BarChart3 className="w-16 h-16 mb-4" />
               <p className="text-lg">上传 Excel 文件开始分析</p>
@@ -382,6 +385,33 @@ export default function DataAnalystPage() {
             </div>
           ) : (
             <div className="space-y-6 max-w-6xl mx-auto">
+              {/* AI 分析报告 */}
+              {aiReport && (
+                <Card className="bg-white">
+                  <CardHeader className="flex flex-row items-center justify-between">
+                    <CardTitle className="text-lg flex items-center gap-2">
+                      <Sparkles className="w-5 h-5 text-purple-600" />
+                      AI 数据分析报告
+                    </CardTitle>
+                    <Button 
+                      variant="outline" 
+                      size="sm" 
+                      onClick={() => setAiReport('')}
+                    >
+                      清除报告
+                    </Button>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="prose max-w-none">
+                      <div className="whitespace-pre-wrap text-sm text-gray-700">
+                        {aiReport}
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
+              
+              {/* 数据可视化图表 */}
               {files.map((file, index) => (
                 <DataVisualization 
                   key={index}
