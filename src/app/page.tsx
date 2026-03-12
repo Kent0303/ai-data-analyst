@@ -20,6 +20,7 @@ import {
   BarChart3
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
+import DataVisualization from '@/components/DataVisualization';
 
 interface Message {
   role: 'user' | 'assistant';
@@ -277,14 +278,23 @@ export default function DataAnalystPage() {
             <div className="mt-4">
               <label className="text-sm font-medium text-gray-700 mb-2 block">数据概览</label>
               {analysisResult.fileAnalyses.map((analysis: any, index: number) => (
-                <Card key={index} className="mb-2 bg-blue-50">
-                  <CardContent className="p-3">
-                    <p className="text-sm font-medium">{analysis.fileName}</p>
-                    <p className="text-xs text-gray-600 mt-1">
-                      {analysis.rowCount} 行 × {analysis.columnCount} 列
-                    </p>
-                  </CardContent>
-                </Card>
+                <div key={index}>
+                  <Card className="mb-2 bg-blue-50">
+                    <CardContent className="p-3">
+                      <p className="text-sm font-medium">{analysis.fileName}</p>
+                      <p className="text-xs text-gray-600 mt-1">
+                        {analysis.rowCount} 行 × {analysis.columnCount} 列
+                      </p>
+                    </CardContent>
+                  </Card>
+                  {/* 数据可视化 */}
+                  {files[index]?.data && (
+                    <DataVisualization 
+                      data={files[index].data} 
+                      fileName={analysis.fileName}
+                    />
+                  )}
+                </div>
               ))}
             </div>
           )}
