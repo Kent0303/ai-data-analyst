@@ -131,6 +131,10 @@ ${fa.columns.map(c => `  • ${c.name} (${c.type}): ${c.uniqueCount} 个唯一�
       return 'API Key 未配置，请联系管理员。';
     }
 
+    console.log('Calling DeepSeek API...');
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 30000); // 30秒超时
+
     const response = await fetch('https://api.deepseek.com/v1/chat/completions', {
       method: 'POST',
       headers: {
@@ -140,20 +144,28 @@ ${fa.columns.map(c => `  • ${c.name} (${c.type}): ${c.uniqueCount} 个唯一�
       body: JSON.stringify({
         model: 'deepseek-chat',
         messages: [{ role: 'user', content: prompt }],
-        temperature: 0.7
-      })
+        temperature: 0.7,
+        max_tokens: 2000
+      }),
+      signal: controller.signal
     });
+
+    clearTimeout(timeoutId);
 
     if (!response.ok) {
       const errorText = await response.text();
       console.error('AI API request failed:', response.status, errorText);
-      throw new Error(`AI API request failed: ${response.status}`);
+      return `API 请求失败 (${response.status}): ${errorText}`;
     }
 
     const data = await response.json();
+    console.log('DeepSeek API response received');
     return data.choices[0].message.content;
   } catch (error) {
     console.error('AI suggestion error:', error);
+    if (error instanceof Error && error.name === 'AbortError') {
+      return 'AI 分析超时，请稍后重试或简化数据后再次尝试。';
+    }
     return `AI 分析建议生成失败: ${error instanceof Error ? error.message : '未知错误'}`;
   }
 }
