@@ -1,29 +1,68 @@
 'use client';
 
+import { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
+import { Button } from '@/components/ui/button';
+import { 
+  BarChart, 
+  Bar, 
+  XAxis, 
+  YAxis, 
+  CartesianGrid, 
+  Tooltip, 
+  Legend, 
+  ResponsiveContainer,
+  PieChart,
+  Pie,
+  Cell,
+  LineChart,
+  Line
+} from 'recharts';
 import { 
   BarChart3, 
   TrendingUp, 
-  Users, 
-  Calendar, 
   Lightbulb,
   Target,
   AlertCircle,
-  CheckCircle2
+  CheckCircle2,
+  Play,
+  Code2
 } from 'lucide-react';
 
 interface AIReportViewProps {
   report: string;
+  data: any[][];
   onClear: () => void;
 }
 
-export default function AIReportView({ report, onClear }: AIReportViewProps) {
-  if (!report) return null;
+interface ChartData {
+  type: 'bar' | 'pie' | 'line';
+  title: string;
+  data: any[];
+  xKey?: string;
+  yKey?: string;
+  nameKey?: string;
+  valueKey?: string;
+}
 
-  // 解析报告内容
-  const sections = parseReport(report);
+const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884D8', '#82CA9D', '#FF6B6B', '#4ECDC4'];
+
+export default function AIReportView({ report, data, onClear }: AIReportViewProps) {
+  const [charts, setCharts] = useState<ChartData[]>([]);
+  const [insights, setInsights] = useState<string[]>([]);
+
+  useEffect(() => {
+    if (report && data) {
+      const extractedCharts = extractChartsFromReport(report, data);
+      const extractedInsights = extractInsights(report);
+      setCharts(extractedCharts);
+      setInsights(extractedInsights);
+    }
+  }, [report, data]);
+
+  if (!report) return null;
 
   return (
     <Card className="bg-gradient-to-br from-white to-blue-50/30 border-blue-100">
@@ -47,171 +86,270 @@ export default function AIReportView({ report, onClear }: AIReportViewProps) {
       
       <CardContent className="p-6">
         <div className="space-y-6">
-          {sections.map((section, index) => (
-            <ReportSection key={index} section={section} index={index} />
-          ))}
+          {/* 核心洞察 */}
+          {insights.length > 0 && (
+            <div className="bg-gradient-to-r from-amber-50 to-yellow-50 border border-amber-200 rounded-xl p-5">
+              <div className="flex items-center gap-3 mb-4">
+                <div className="p-2 bg-amber-100 rounded-lg">
+                  <Lightbulb className="w-5 h-5 text-amber-600" />
+                </div>
+                <h3 className="text-lg font-bold text-gray-800">核心洞察</h3>
+              </div>
+              <div className="space-y-3">
+                {insights.map((insight, index) => (
+                  <div key={index} className="flex items-start gap-3">
+                    <div className="w-6 h-6 rounded-full bg-amber-500 text-white flex items-center justify-center text-sm font-bold flex-shrink-0">
+                      {index + 1}
+                    </div>
+                    <p className="text-gray-700 leading-relaxed">{insight}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* 自动生成的图表 */}
+          {charts.length > 0 && (
+            <div className="space-y-6">
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-blue-100 rounded-lg">
+                  <Target className="w-5 h-5 text-blue-600" />
+                </div>
+                <h3 className="text-lg font-bold text-gray-800">可视化分析</h3>
+                <Badge variant="secondary" className="ml-auto">
+                  {charts.length} 个图表
+                </Badge>
+              </div>
+              
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                {charts.map((chart, index) => (
+                  <ChartCard key={index} chart={chart} index={index} />
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* 原始报告文本（可折叠） */}
+          <details className="group">
+            <summary className="flex items-center gap-2 cursor-pointer text-gray-500 hover:text-gray-700 transition-colors">
+              <Code2 className="w-4 h-4" />
+              <span className="text-sm">查看详细分析文本</span>
+              <span className="ml-auto text-xs">点击展开</span>
+            </summary>
+            <div className="mt-4 p-4 bg-gray-50 rounded-lg">
+              <pre className="text-sm text-gray-700 whitespace-pre-wrap">{report}</pre>
+            </div>
+          </details>
         </div>
       </CardContent>
     </Card>
   );
 }
 
-interface Section {
-  title: string;
-  type: 'summary' | 'metrics' | 'insights' | 'suggestions' | 'default';
-  content: string[];
-}
-
-function parseReport(report: string): Section[] {
-  const lines = report.split('\n');
-  const sections: Section[] = [];
-  let currentSection: Section | null = null;
-
-  lines.forEach(line => {
-    const trimmed = line.trim();
-    if (!trimmed) return;
-
-    // 检测标题行
-    if (trimmed.startsWith('## ') || trimmed.startsWith('### ')) {
-      if (currentSection) {
-        sections.push(currentSection);
-      }
-      const title = trimmed.replace(/^#+\s*/, '');
-      const type = detectSectionType(title);
-      currentSection = { title, type, content: [] };
-    } else if (currentSection) {
-      currentSection.content.push(trimmed);
-    }
-  });
-
-  if (currentSection) {
-    sections.push(currentSection);
-  }
-
-  return sections;
-}
-
-function detectSectionType(title: string): Section['type'] {
-  const lower = title.toLowerCase();
-  if (lower.includes('摘要') || lower.includes('总结') || lower.includes('overview')) {
-    return 'summary';
-  }
-  if (lower.includes('指标') || lower.includes('数据') || lower.includes('metrics')) {
-    return 'metrics';
-  }
-  if (lower.includes('洞察') || lower.includes('发现') || lower.includes('insights')) {
-    return 'insights';
-  }
-  if (lower.includes('建议') || lower.includes('推荐') || lower.includes('suggestions')) {
-    return 'suggestions';
-  }
-  return 'default';
-}
-
-function ReportSection({ section, index }: { section: Section; index: number }) {
-  const icons = {
-    summary: <Target className="w-5 h-5 text-blue-600" />,
-    metrics: <BarChart3 className="w-5 h-5 text-green-600" />,
-    insights: <Lightbulb className="w-5 h-5 text-yellow-600" />,
-    suggestions: <TrendingUp className="w-5 h-5 text-purple-600" />,
-    default: <CheckCircle2 className="w-5 h-5 text-gray-600" />
-  };
-
-  const colors = {
-    summary: 'bg-blue-50 border-blue-200',
-    metrics: 'bg-green-50 border-green-200',
-    insights: 'bg-yellow-50 border-yellow-200',
-    suggestions: 'bg-purple-50 border-purple-200',
-    default: 'bg-gray-50 border-gray-200'
-  };
-
+function ChartCard({ chart, index }: { chart: ChartData; index: number }) {
   return (
-    <div className={`rounded-xl border ${colors[section.type]} p-5`}>
-      {/* 章节标题 */}
-      <div className="flex items-center gap-3 mb-4">
-        <div className="p-2 bg-white rounded-lg shadow-sm">
-          {icons[section.type]}
-        </div>
-        <h3 className="text-lg font-bold text-gray-800">{section.title}</h3>
-        <Badge variant="secondary" className="ml-auto">
-          {index + 1}
+    <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm">
+      <div className="flex items-center gap-2 mb-4">
+        {chart.type === 'bar' && <BarChart3 className="w-5 h-5 text-blue-600" />}
+        {chart.type === 'pie' && <Target className="w-5 h-5 text-green-600" />}
+        {chart.type === 'line' && <TrendingUp className="w-5 h-5 text-purple-600" />}
+        <h4 className="font-semibold text-gray-800">{chart.title}</h4>
+        <Badge variant="outline" className="ml-auto text-xs">
+          图表 {index + 1}
         </Badge>
       </div>
-
-      <Separator className="mb-4" />
-
-      {/* 章节内容 */}
-      <div className="space-y-3">
-        {section.content.map((line, i) => {
-          // 检测列表项
-          if (line.startsWith('- ') || line.startsWith('• ')) {
-            return (
-              <div key={i} className="flex items-start gap-3 pl-2">
-                <div className="w-2 h-2 rounded-full bg-blue-500 mt-2 flex-shrink-0" />
-                <p className="text-gray-700 leading-relaxed">
-                  {formatContent(line.replace(/^[-•]\s*/, ''))}
-                </p>
-              </div>
-            );
-          }
-          
-          // 检测数字列表
-          if (/^\d+\.\s/.test(line)) {
-            const num = line.match(/^\d+/)?.[0];
-            return (
-              <div key={i} className="flex items-start gap-3">
-                <div className="w-6 h-6 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center text-sm font-bold flex-shrink-0">
-                  {num}
-                </div>
-                <p className="text-gray-700 leading-relaxed pt-0.5">
-                  {formatContent(line.replace(/^\d+\.\s*/, ''))}
-                </p>
-              </div>
-            );
-          }
-
-          // 检测重要提示
-          if (line.includes('**') || line.includes('注意') || line.includes('重要')) {
-            return (
-              <div key={i} className="flex items-start gap-2 bg-amber-50 border border-amber-200 rounded-lg p-3">
-                <AlertCircle className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
-                <p className="text-amber-800 font-medium">
-                  {formatContent(line)}
-                </p>
-              </div>
-            );
-          }
-
-          // 普通段落
-          return (
-            <p key={i} className="text-gray-700 leading-relaxed pl-2">
-              {formatContent(line)}
-            </p>
-          );
-        })}
+      
+      <div className="h-64">
+        <ResponsiveContainer width="100%" height="100%">
+          {chart.type === 'bar' && (
+            <BarChart data={chart.data}>
+              <CartesianGrid strokeDasharray="3 3" />
+              <XAxis dataKey={chart.xKey} tick={{ fontSize: 12 }} />
+              <YAxis />
+              <Tooltip />
+              <Bar dataKey={chart.yKey} fill={COLORS[index % COLORS.length]} radius={[4, 4, 0, 0]} />
+            </BarChart>
+          )}
+          {chart.type === 'pie' && (
+            <PieChart>
+              <Pie
+                data={chart.data}
+                cx="50%"
+                cy="50%"
+                labelLine={false}
+                label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
+                outerRadius={80}
+                dataKey={chart.valueKey}
+                nameKey={chart.nameKey}
+              >
+                {chart.data.map((entry, i) => (
+                  <Cell key={`cell-${i}`} fill={COLORS[i % COLORS.length]} />
+                ))}
+              </Pie>
+              <Tooltip />
+              <Legend />
+            </PieChart>
+          )}
+          {chart.type === 'line' && (
+            <LineChart data={chart.data}>
+              <CartesianGrid strokeDasharray="3 3" />
+              <XAxis dataKey={chart.xKey} tick={{ fontSize: 12 }} />
+              <YAxis />
+              <Tooltip />
+              <Line 
+                type="monotone" 
+                dataKey={chart.yKey} 
+                stroke={COLORS[index % COLORS.length]} 
+                strokeWidth={3}
+                dot={{ fill: COLORS[index % COLORS.length] }}
+              />
+            </LineChart>
+          )}
+        </ResponsiveContainer>
       </div>
     </div>
   );
 }
 
-// 格式化内容，处理加粗、高亮等
-function formatContent(text: string): React.ReactNode {
-  // 处理加粗 **text**
-  const parts = text.split(/(\*\*[^*]+\*\*)/g);
+// 从报告中提取图表数据
+function extractChartsFromReport(report: string, rawData: any[][]): ChartData[] {
+  const charts: ChartData[] = [];
   
-  return parts.map((part, i) => {
-    if (part.startsWith('**') && part.endsWith('**')) {
-      const content = part.slice(2, -2);
-      // 检测是否是数字/百分比
-      if (/^[\d%.,]+$/.test(content) || /\d+%?/.test(content)) {
-        return (
-          <span key={i} className="inline-flex items-center px-2 py-0.5 bg-blue-100 text-blue-700 rounded-md font-bold mx-1">
-            {content}
-          </span>
-        );
+  if (!rawData || rawData.length < 2) return charts;
+
+  const headers = rawData[0] as string[];
+  const rows = rawData.slice(1) as any[][];
+
+  // 1. 课程类型分布（饼图）
+  const courseTypeIndex = headers.findIndex(h => h.includes('课程类型') || h.includes('类型'));
+  if (courseTypeIndex >= 0) {
+    const distribution: Record<string, number> = {};
+    rows.forEach(row => {
+      const type = String(row[courseTypeIndex] || '未知');
+      distribution[type] = (distribution[type] || 0) + 1;
+    });
+    
+    charts.push({
+      type: 'pie',
+      title: '课程类型分布',
+      data: Object.entries(distribution).map(([name, value]) => ({ name, value })),
+      nameKey: 'name',
+      valueKey: 'value'
+    });
+  }
+
+  // 2. 教练课程量（柱状图）
+  const coachIndex = headers.findIndex(h => h.includes('教练') || h.includes('教练姓名'));
+  if (coachIndex >= 0) {
+    const coachCounts: Record<string, number> = {};
+    rows.forEach(row => {
+      const coach = String(row[coachIndex] || '未知');
+      coachCounts[coach] = (coachCounts[coach] || 0) + 1;
+    });
+    
+    const sortedCoaches = Object.entries(coachCounts)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 10);
+    
+    charts.push({
+      type: 'bar',
+      title: '教练课程量 TOP10',
+      data: sortedCoaches.map(([name, count]) => ({ name, count })),
+      xKey: 'name',
+      yKey: 'count'
+    });
+  }
+
+  // 3. 时段分布（柱状图）
+  const timeIndex = headers.findIndex(h => h.includes('时间') || h.includes('时段') || h.includes('小时'));
+  if (timeIndex >= 0) {
+    const hourCounts: Record<string, number> = {};
+    rows.forEach(row => {
+      const timeValue = row[timeIndex];
+      let hour = '未知';
+      if (typeof timeValue === 'string' && timeValue.includes(':')) {
+        hour = timeValue.split(':')[0] + ':00';
+      } else if (typeof timeValue === 'number') {
+        hour = timeValue + ':00';
       }
-      return <strong key={i} className="font-bold text-gray-900">{content}</strong>;
+      hourCounts[hour] = (hourCounts[hour] || 0) + 1;
+    });
+    
+    charts.push({
+      type: 'bar',
+      title: '时段分布',
+      data: Object.entries(hourCounts).map(([hour, count]) => ({ hour, count })),
+      xKey: 'hour',
+      yKey: 'count'
+    });
+  }
+
+  // 4. 收入趋势（如果有日期和金额）
+  const dateIndex = headers.findIndex(h => h.includes('日期') || h.includes('时间'));
+  const amountIndex = headers.findIndex(h => h.includes('金额') || h.includes('价格'));
+  
+  if (dateIndex >= 0 && amountIndex >= 0) {
+    const dailyRevenue: Record<string, number> = {};
+    rows.forEach(row => {
+      const date = String(row[dateIndex]).substring(0, 10);
+      const amount = Number(row[amountIndex]) || 0;
+      dailyRevenue[date] = (dailyRevenue[date] || 0) + amount;
+    });
+    
+    const sortedDates = Object.entries(dailyRevenue)
+      .sort((a, b) => a[0].localeCompare(b[0]))
+      .slice(-14); // 最近14天
+    
+    if (sortedDates.length > 1) {
+      charts.push({
+        type: 'line',
+        title: '收入趋势（最近14天）',
+        data: sortedDates.map(([date, revenue]) => ({ date, revenue })),
+        xKey: 'date',
+        yKey: 'revenue'
+      });
     }
-    return part;
+  }
+
+  return charts;
+}
+
+// 提取核心洞察
+function extractInsights(report: string): string[] {
+  const insights: string[] = [];
+  
+  // 匹配 "核心发现"、"洞察"、"结论" 等部分
+  const lines = report.split('\n');
+  let inInsightSection = false;
+  
+  lines.forEach(line => {
+    const trimmed = line.trim();
+    
+    // 检测洞察部分开始
+    if (/^(核心发现|关键洞察|主要结论|业务洞察)/.test(trimmed)) {
+      inInsightSection = true;
+      return;
+    }
+    
+    // 检测新章节开始，结束洞察部分
+    if (/^(##|###)/.test(trimmed) && !trimmed.includes('发现') && !trimmed.includes('洞察')) {
+      inInsightSection = false;
+      return;
+    }
+    
+    // 收集洞察内容
+    if (inInsightSection && trimmed && !trimmed.startsWith('#')) {
+      // 清理 markdown 格式
+      const cleanLine = trimmed
+        .replace(/^[-•*]\s*/, '')
+        .replace(/^\d+\.\s*/, '')
+        .replace(/\*\*/g, '');
+      
+      if (cleanLine.length > 10 && insights.length < 5) {
+        insights.push(cleanLine);
+      }
+    }
   });
+  
+  return insights;
 }
