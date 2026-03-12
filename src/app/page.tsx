@@ -22,6 +22,7 @@ import {
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import DataVisualization from '@/components/DataVisualization';
+import AIReportView from '@/components/AIReportView';
 
 interface Message {
   role: 'user' | 'assistant';
@@ -387,28 +388,10 @@ export default function DataAnalystPage() {
             <div className="space-y-6 max-w-6xl mx-auto">
               {/* AI 分析报告 */}
               {aiReport && (
-                <Card className="bg-white">
-                  <CardHeader className="flex flex-row items-center justify-between">
-                    <CardTitle className="text-lg flex items-center gap-2">
-                      <Sparkles className="w-5 h-5 text-purple-600" />
-                      AI 数据分析报告
-                    </CardTitle>
-                    <Button 
-                      variant="outline" 
-                      size="sm" 
-                      onClick={() => setAiReport('')}
-                    >
-                      清除报告
-                    </Button>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="prose max-w-none">
-                      <div className="whitespace-pre-wrap text-sm text-gray-700">
-                        {aiReport}
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
+                <AIReportView 
+                  report={aiReport} 
+                  onClear={() => setAiReport('')}
+                />
               )}
               
               {/* 数据可视化图表 */}
