@@ -50,7 +50,7 @@ KIMI_API_KEY=your_kimi_api_key
 ## 更新日志
 
 - 2026-03-12: 修复 UI 组件依赖问题
-
++- 2026-03-12: 可视化展示 抱有料有图数据表格式
 ## License
 
 MIT
