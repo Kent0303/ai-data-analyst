@@ -7,19 +7,20 @@ import { Textarea } from '@/components/ui/textarea';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Badge } from '@/components/ui/badge';
-import { 
-  Upload, 
-  Send, 
-  FileSpreadsheet, 
-  X, 
-  Bot, 
-  User, 
+import {
+  Upload,
+  Send,
+  FileSpreadsheet,
+  X,
+  Bot,
+  User,
   Sparkles,
   Loader2,
   BarChart3,
   ChevronDown,
   MessageSquare,
-  History
+  History,
+  Menu
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import DataVisualization from '@/components/DataVisualization';
@@ -54,11 +55,22 @@ export default function DataAnalystPage() {
   const [analysisResult, setAnalysisResult] = useState<any>(null);
   const [aiReport, setAiReport] = useState<string>('');
   const [showModelSelect, setShowModelSelect] = useState(false);
+  const [showMobileSidebar, setShowMobileSidebar] = useState(false);
+  const [activeTab, setActiveTab] = useState<'chat' | 'visualization'>('chat');
   const fileInputRef = useRef<HTMLInputElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   // 历史记录功能
   const { addToHistory, history } = useAnalysisHistory();
+
+  // 检测是否为移动端
+  const [isMobile, setIsMobile] = useState(false);
+  useEffect(() => {
+    const checkMobile = () => setIsMobile(window.innerWidth < 768);
+    checkMobile();
+    window.addEventListener('resize', checkMobile);
+    return () => window.removeEventListener('resize', checkMobile);
+  }, []);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -283,9 +295,45 @@ export default function DataAnalystPage() {
   };
 
   return (
-    <div className="flex h-screen bg-gray-100">
+    <div className="flex h-screen bg-gray-100 overflow-hidden">
+      {/* 移动端顶部导航 */}
+      {isMobile && (
+        <div className="fixed top-0 left-0 right-0 h-14 bg-white border-b border-gray-200 z-50 flex items-center justify-between px-4">
+          <div className="flex items-center gap-2">
+            <BarChart3 className="w-6 h-6 text-blue-600" />
+            <span className="font-semibold">AI 数据分析</span>
+          </div>
+          <div className="flex items-center gap-2">
+            {files.length > 0 && (
+              <Badge variant="secondary" className="text-xs">
+                {files.length} 个文件
+              </Badge>
+            )}
+            <button
+              onClick={() => setShowMobileSidebar(!showMobileSidebar)}
+              className="p-2 hover:bg-gray-100 rounded-lg"
+            >
+              {showMobileSidebar ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* 左侧 - AI 对话区域 */}
-      <div className="w-96 bg-white border-r border-gray-200 flex flex-col">
+      <div className={`${isMobile 
+        ? `fixed inset-0 z-40 bg-white transform transition-transform duration-300 ${showMobileSidebar ? 'translate-x-0' : '-translate-x-full'}` 
+        : 'w-96 bg-white border-r border-gray-200'} flex-col ${isMobile ? 'pt-14' : ''}`}>
+        {isMobile && (
+          <div className="flex items-center justify-between p-4 border-b border-gray-200">
+            <span className="font-semibold">对话</span>
+            <button
+              onClick={() => setShowMobileSidebar(false)}
+              className="p-2 hover:bg-gray-100 rounded-lg"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
+        )}
         {/* 顶部 - 模型选择 */}
         <div className="p-4 border-b border-gray-200">
           <div className="relative">
@@ -451,24 +499,26 @@ export default function DataAnalystPage() {
       </div>
 
       {/* 右侧 - 数据可视化区域 */}
-      <div className="flex-1 flex flex-col bg-gray-50">
-        {/* 顶部标题 */}
-        <div className="bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <BarChart3 className="w-6 h-6 text-blue-600" />
-            <h1 className="text-xl font-semibold">数据分析结果</h1>
+      <div className={`flex-1 flex flex-col bg-gray-50 ${isMobile ? 'pt-14' : ''}`}>
+        {/* 顶部标题 - 桌面端显示 */}
+        {!isMobile && (
+          <div className="bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <BarChart3 className="w-6 h-6 text-blue-600" />
+              <h1 className="text-xl font-semibold">数据分析结果</h1>
+            </div>
+            {files.length > 0 && (
+              <Badge variant="secondary" className="text-sm">
+                {files.length} 个文件已分析
+              </Badge>
+            )}
           </div>
-          {files.length > 0 && (
-            <Badge variant="secondary" className="text-sm">
-              {files.length} 个文件已分析
-            </Badge>
-          )}
-        </div>
+        )}
 
         {/* 可视化内容 */}
-        <ScrollArea className="flex-1 p-6">
+        <ScrollArea className={`flex-1 ${isMobile ? 'p-4' : 'p-6'}`}>
           {files.length === 0 && !aiReport ? (
-            <div className="flex flex-col items-center justify-center h-full text-gray-400">
+            <div className="flex flex-col items-center justify-center h-full text-gray-400 px-4">
               <BarChart3 className="w-16 h-16 mb-4" />
               <p className="text-lg">上传 Excel 文件开始分析</p>
               <p className="text-sm mt-2">支持 .xlsx 和 .xls 格式</p>
