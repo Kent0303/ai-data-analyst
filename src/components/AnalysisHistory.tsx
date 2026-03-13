@@ -113,7 +113,13 @@ export default function AnalysisHistory({ onSelectHistory, currentFileName }: An
   const [isExpanded, setIsExpanded] = useState(false);
 
   if (history.length === 0) {
-    return null;
+    return (
+      <div className="mt-6 pt-6 border-t border-gray-200">
+        <p className="text-sm text-gray-400 text-center">
+          暂无历史记录，分析后的文件将显示在这里
+        </p>
+      </div>
+    );
   }
 
   const formatDate = (timestamp: number) => {
