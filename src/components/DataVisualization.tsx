@@ -195,7 +195,7 @@ export default function DataVisualization({ data, fileName }: DataVisualizationP
   const generateHeatmapData = () => {
     if (categoryColumns.length < 2 && !(categoryColumns.length === 1 && numericColumns.length >= 1)) return null;
     
-    let xCol, yCol, valueCol;
+    let xCol: typeof categoryColumns[0], yCol: typeof categoryColumns[0], valueCol: typeof numericColumns[0] | undefined;
     
     if (categoryColumns.length >= 2) {
       xCol = categoryColumns[0];
