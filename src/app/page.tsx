@@ -25,6 +25,7 @@ import * as XLSX from 'xlsx';
 import DataVisualization from '@/components/DataVisualization';
 import AIReportView from '@/components/AIReportView';
 import AnalysisHistory, { useAnalysisHistory, HistoryItem } from '@/components/AnalysisHistory';
+import SmartQuery from '@/components/SmartQuery';
 
 interface Message {
   role: 'user' | 'assistant';
@@ -225,6 +226,62 @@ export default function DataAnalystPage() {
     }]);
   };
 
+  // 智能查询处理
+  const handleSmartQuery = async (query: string, mode: 'general' | 'prediction') => {
+    if (files.length === 0) return;
+
+    setIsLoading(true);
+    setMessages(prev => [...prev, {
+      role: 'user',
+      content: query,
+      type: 'text'
+    }]);
+
+    try {
+      const response = await fetch('/api/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          messages: [...messages, { role: 'user', content: query }].map(m => ({
+            role: m.role,
+            content: m.content
+          })),
+          data: {
+            fileName: files[0].name,
+            headers: files[0].data[0],
+            rowCount: files[0].data.length - 1,
+            sampleData: files[0].data.slice(1, 5)
+          },
+          model: selectedModel,
+          query
+        })
+      });
+
+      const result = await response.json();
+      
+      if (result.success) {
+        setMessages(prev => [...prev, {
+          role: 'assistant',
+          content: result.response,
+          type: 'analysis'
+        }]);
+        setAiReport(result.response);
+        
+        // 保存到历史记录
+        addToHistory(files[0].name, files[0].data, result.response);
+      }
+    } catch (error) {
+      console.error('Smart query error:', error);
+      setMessages(prev => [...prev, {
+        role: 'assistant',
+        content: '查询过程中出现错误，请稍后重试。',
+        type: 'text'
+      }]);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   return (
     <div className="flex h-screen bg-gray-100">
       {/* 左侧 - AI 对话区域 */}
@@ -418,6 +475,14 @@ export default function DataAnalystPage() {
             </div>
           ) : (
             <div className="space-y-6 max-w-6xl mx-auto">
+              {/* 智能查询 */}
+              {files.length > 0 && (
+                <SmartQuery 
+                  onQuery={handleSmartQuery}
+                  isLoading={isLoading}
+                />
+              )}
+
               {/* AI 分析报告 */}
               {aiReport && files.length > 0 && (
                 <AIReportView 
