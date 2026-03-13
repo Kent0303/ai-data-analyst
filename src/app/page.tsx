@@ -19,8 +19,11 @@ import {
   Target,
   Brain,
   ArrowRight,
-  CheckCircle2,
-  Clock,
+  LayoutDashboard,
+  PieChart,
+  MessageSquare,
+  Download,
+  Loader2,
   Zap
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
@@ -42,12 +45,53 @@ interface UploadedFile {
   size: number;
 }
 
-type Step = 'upload' | 'analyzing' | 'ready' | 'querying';
+type Step = 'upload' | 'analyzing' | 'ready';
+type ResultTab = 'insights' | 'charts' | 'explore';
+
+// 关键指标卡片组件
+function MetricCard({ 
+  title, 
+  value, 
+  trend, 
+  trendUp, 
+  icon: Icon,
+  color 
+}: { 
+  title: string; 
+  value: string; 
+  trend?: string; 
+  trendUp?: boolean;
+  icon: any;
+  color: string;
+}) {
+  return (
+    <Card className="hover:shadow-lg transition-shadow">
+      <CardContent className="p-4">
+        <div className="flex items-start justify-between">
+          <div>
+            <p className="text-sm text-gray-500 mb-1">{title}</p>
+            <p className="text-2xl font-bold text-gray-900">{value}</p>
+            {trend && (
+              <p className={`text-xs mt-1 flex items-center gap-1 ${trendUp ? 'text-green-600' : 'text-red-600'}`}>
+                <TrendingUp className={`w-3 h-3 ${!trendUp && 'rotate-180'}`} />
+                {trend}
+              </p>
+            )}
+          </div>
+          <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${color}`}>
+            <Icon className="w-5 h-5 text-white" />
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
 
 export default function DataAnalystPage() {
   const [files, setFiles] = useState<UploadedFile[]>([]);
   const [messages, setMessages] = useState<Message[]>([]);
   const [currentStep, setCurrentStep] = useState<Step>('upload');
+  const [activeTab, setActiveTab] = useState<ResultTab>('insights');
   const [isLoading, setIsLoading] = useState(false);
   const [selectedModel, setSelectedModel] = useState<'deepseek' | 'kimi'>('deepseek');
   const [aiReport, setAiReport] = useState<string>('');
@@ -123,6 +167,7 @@ export default function DataAnalystPage() {
           type: 'analysis'
         }]);
         setCurrentStep('ready');
+        setActiveTab('insights');
         addToHistory(file.name, file.data, result.suggestions);
       }
     } catch (error) {
@@ -143,7 +188,6 @@ export default function DataAnalystPage() {
     if (files.length === 0) return;
 
     setIsLoading(true);
-    setCurrentStep('querying');
     
     setMessages(prev => [...prev, {
       role: 'user',
@@ -182,7 +226,6 @@ export default function DataAnalystPage() {
       console.error('Query error:', error);
     } finally {
       setIsLoading(false);
-      setCurrentStep('ready');
     }
   };
 
@@ -201,6 +244,7 @@ export default function DataAnalystPage() {
       type: 'analysis'
     }]);
     setCurrentStep('ready');
+    setActiveTab('insights');
   };
 
   // 清除当前分析
@@ -209,6 +253,76 @@ export default function DataAnalystPage() {
     setMessages([]);
     setAiReport('');
     setCurrentStep('upload');
+    setActiveTab('insights');
+  };
+
+  // 导出报告
+  const handleExport = () => {
+    const reportContent = `
+# 数据分析报告
+
+文件：${files[0]?.name}
+生成时间：${new Date().toLocaleString('zh-CN')}
+
+${aiReport}
+
+---
+对话记录：
+${messages.map(m => `${m.role === 'user' ? '用户' : 'AI'}: ${m.content}`).join('\n\n')}
+    `;
+    
+    const blob = new Blob([reportContent], { type: 'text/markdown' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `分析报告_${files[0]?.name.replace(/\.[^/.]+$/, '')}_${new Date().toISOString().split('T')[0]}.md`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  // 计算关键指标（示例）
+  const getMetrics = () => {
+    if (!files[0]?.data) return [];
+    
+    const headers = files[0].data[0] as string[];
+    const rows = files[0].data.slice(1) as any[][];
+    
+    // 根据表头智能识别指标
+    const metrics = [];
+    
+    // 会员数
+    const memberCol = headers.findIndex(h => h.includes('会员') || h.includes('姓名'));
+    if (memberCol >= 0) {
+      const uniqueMembers = new Set(rows.map(r => r[memberCol])).size;
+      metrics.push({
+        title: '会员总数',
+        value: uniqueMembers.toString(),
+        icon: Users,
+        color: 'bg-blue-500'
+      });
+    }
+    
+    // 收入
+    const revenueCol = headers.findIndex(h => h.includes('金额') || h.includes('收入') || h.includes('价格'));
+    if (revenueCol >= 0) {
+      const totalRevenue = rows.reduce((sum, r) => sum + (Number(r[revenueCol]) || 0), 0);
+      metrics.push({
+        title: '总收入',
+        value: `¥${totalRevenue.toLocaleString()}`,
+        icon: Target,
+        color: 'bg-green-500'
+      });
+    }
+    
+    // 数据行数
+    metrics.push({
+      title: '数据记录',
+      value: rows.length.toString(),
+      icon: BarChart3,
+      color: 'bg-purple-500'
+    });
+    
+    return metrics;
   };
 
   // 步骤指示器
@@ -217,9 +331,9 @@ export default function DataAnalystPage() {
       {[
         { key: 'upload', label: '上传数据', icon: Upload },
         { key: 'analyzing', label: 'AI分析', icon: Brain },
-        { key: 'ready', label: '查看结果', icon: BarChart3 },
+        { key: 'ready', label: '查看结果', icon: LayoutDashboard },
       ].map((step, index) => {
-        const isActive = currentStep === step.key || (step.key === 'analyzing' && currentStep === 'querying');
+        const isActive = currentStep === step.key;
         const isCompleted = 
           (step.key === 'upload' && currentStep !== 'upload') ||
           (step.key === 'analyzing' && currentStep === 'ready');
@@ -330,120 +444,200 @@ export default function DataAnalystPage() {
     </motion.div>
   );
 
+  // 结果页面 - 标签页内容
+  const TabContent = () => {
+    switch (activeTab) {
+      case 'insights':
+        return (
+          <motion.div
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="space-y-6"
+          >
+            {/* AI 分析报告 */}
+            {aiReport && (
+              <AIReportView 
+                report={aiReport}
+                data={files[0]?.data || []}
+                fileName={files[0]?.name}
+                onClear={() => setAiReport('')}
+              />
+            )}
+          </motion.div>
+        );
+      
+      case 'charts':
+        return (
+          <motion.div
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="space-y-6"
+          >
+            {files.map((file, index) => (
+              <DataVisualization 
+                key={index}
+                data={file.data} 
+                fileName={file.name}
+              />
+            ))}
+          </motion.div>
+        );
+      
+      case 'explore':
+        return (
+          <motion.div
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="space-y-6"
+          >
+            {/* 智能查询 */}
+            <SmartQuery 
+              onQuery={handleSmartQuery}
+              isLoading={isLoading}
+            />
+
+            {/* 对话历史 */}
+            {messages.length > 0 && (
+              <Card className="bg-gray-50 border-0">
+                <CardContent className="p-4">
+                  <h3 className="font-medium text-gray-700 mb-4 flex items-center gap-2">
+                    <MessageCircle className="w-4 h-4" />
+                    对话记录 ({messages.length})
+                  </h3>
+                  <div className="space-y-3 max-h-96 overflow-y-auto">
+                    {messages.map((msg, idx) => (
+                      <div 
+                        key={idx} 
+                        className={`p-3 rounded-lg ${
+                          msg.role === 'user' ? 'bg-blue-100 ml-8' : 'bg-white mr-8 border border-gray-200'
+                        }`}
+                      >
+                        <div className="flex items-center gap-2 mb-1">
+                          <span className={`text-xs font-medium ${
+                            msg.role === 'user' ? 'text-blue-700' : 'text-gray-500'
+                          }`}>
+                            {msg.role === 'user' ? '你' : 'AI 助手'}
+                          </span>
+                          {msg.type === 'analysis' && (
+                            <Badge variant="secondary" className="text-xs">
+                              <Zap className="w-3 h-3 mr-1" />
+                              分析
+                            </Badge>
+                          )}
+                        </div>
+                        <div className="text-sm whitespace-pre-wrap">{msg.content}</div>
+                      </div>
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+          </motion.div>
+        );
+    }
+  };
+
   // 结果展示
-  const ResultsView = () => (
-    <motion.div
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      className="space-y-6"
-    >
-      {/* 顶部工具栏 */}
-      <div className="flex items-center justify-between bg-white p-4 rounded-xl border border-gray-200">
-        <div className="flex items-center gap-4">
-          <div className="flex items-center gap-2">
-            <FileSpreadsheet className="w-5 h-5 text-green-600" />
-            <span className="font-medium">{files[0]?.name}</span>
-            <Badge variant="secondary">
-              {files[0]?.data.length - 1} 行
-            </Badge>
+  const ResultsView = () => {
+    const metrics = getMetrics();
+    
+    return (
+      <motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        className="space-y-6"
+      >
+        {/* 顶部工具栏 */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-4 rounded-xl border border-gray-200">
+          <div className="flex items-center gap-4">
+            <div className="flex items-center gap-2">
+              <FileSpreadsheet className="w-5 h-5 text-green-600" />
+              <span className="font-medium">{files[0]?.name}</span>
+            </div>
+            
+            {/* 模型选择 */}
+            <div className="relative">
+              <button
+                onClick={() => setShowModelSelect(!showModelSelect)}
+                className="flex items-center gap-2 px-3 py-1.5 bg-gray-100 rounded-lg text-sm hover:bg-gray-200 transition-colors"
+              >
+                <Sparkles className="w-4 h-4 text-blue-600" />
+                {selectedModel === 'deepseek' ? 'DeepSeek' : 'Kimi'}
+                <ChevronRight className={`w-3 h-3 transition-transform ${showModelSelect ? 'rotate-90' : ''}`} />
+              </button>
+              
+              {showModelSelect && (
+                <div className="absolute top-full left-0 mt-1 bg-white border border-gray-200 rounded-lg shadow-lg z-10 min-w-[120px]">
+                  {['deepseek', 'kimi'].map((model) => (
+                    <button
+                      key={model}
+                      onClick={() => { setSelectedModel(model as any); setShowModelSelect(false); }}
+                      className={`w-full px-3 py-2 text-left text-sm hover:bg-gray-50 ${selectedModel === model ? 'bg-blue-50 text-blue-600' : ''}`}
+                    >
+                      {model === 'deepseek' ? 'DeepSeek' : 'Kimi'}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
           
-          {/* 模型选择 */}
-          <div className="relative">
-            <button
-              onClick={() => setShowModelSelect(!showModelSelect)}
-              className="flex items-center gap-2 px-3 py-1.5 bg-gray-100 rounded-lg text-sm hover:bg-gray-200 transition-colors"
-            >
-              <Sparkles className="w-4 h-4 text-blue-600" />
-              {selectedModel === 'deepseek' ? 'DeepSeek' : 'Kimi'}
-              <ChevronRight className={`w-3 h-3 transition-transform ${showModelSelect ? 'rotate-90' : ''}`} />
-            </button>
-            
-            {showModelSelect && (
-              <div className="absolute top-full left-0 mt-1 bg-white border border-gray-200 rounded-lg shadow-lg z-10 min-w-[120px]">
-                {['deepseek', 'kimi'].map((model) => (
-                  <button
-                    key={model}
-                    onClick={() => { setSelectedModel(model as any); setShowModelSelect(false); }}
-                    className={`w-full px-3 py-2 text-left text-sm hover:bg-gray-50 ${selectedModel === model ? 'bg-blue-50 text-blue-600' : ''}`}
-                  >
-                    {model === 'deepseek' ? 'DeepSeek' : 'Kimi'}
-                  </button>
-                ))}
-              </div>
-            )}
+          <div className="flex items-center gap-2">
+            <Button variant="outline" size="sm" onClick={handleExport}>
+              <Download className="w-4 h-4 mr-1" />
+              导出报告
+            </Button>
+            <Button variant="outline" size="sm" onClick={handleClear}>
+              <X className="w-4 h-4 mr-1" />
+              新分析
+            </Button>
           </div>
         </div>
-        
-        <Button variant="outline" size="sm" onClick={handleClear}>
-          <X className="w-4 h-4 mr-1" />
-          清除
-        </Button>
-      </div>
 
-      {/* 智能查询 */}
-      <SmartQuery 
-        onQuery={handleSmartQuery}
-        isLoading={isLoading}
-      />
+        {/* 关键指标卡片 */}
+        {metrics.length > 0 && (
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            {metrics.map((metric, idx) => (
+              <MetricCard key={idx} {...metric} />
+            ))}
+          </div>
+        )}
 
-      {/* AI 分析报告 */}
-      {aiReport && (
-        <AIReportView 
-          report={aiReport}
-          data={files[0]?.data || []}
-          fileName={files[0]?.name}
-          onClear={() => setAiReport('')}
-        />
-      )}
-      
-      {/* 数据可视化 */}
-      {files.map((file, index) => (
-        <DataVisualization 
-          key={index}
-          data={file.data} 
-          fileName={file.name}
-        />
-      ))}
-
-      {/* 对话历史 */}
-      {messages.length > 0 && (
-        <Card className="bg-gray-50 border-0">
-          <CardContent className="p-4">
-            <h3 className="font-medium text-gray-700 mb-4 flex items-center gap-2">
-              <MessageCircle className="w-4 h-4" />
-              对话记录
-            </h3>
-            <div className="space-y-3">
-              {messages.map((msg, idx) => (
-                <div 
-                  key={idx} 
-                  className={`p-3 rounded-lg ${
-                    msg.role === 'user' ? 'bg-blue-100 ml-8' : 'bg-white mr-8'
-                  }`}
-                >
-                  <div className="flex items-center gap-2 mb-1">
-                    <span className={`text-xs font-medium ${
-                      msg.role === 'user' ? 'text-blue-700' : 'text-gray-500'
-                    }`}>
-                      {msg.role === 'user' ? '你' : 'AI 助手'}
-                    </span>
-                    {msg.type === 'analysis' && (
-                      <Badge variant="secondary" className="text-xs">
-                        <Zap className="w-3 h-3 mr-1" />
-                        分析
-                      </Badge>
-                    )}
-                  </div>
-                  <div className="text-sm whitespace-pre-wrap">{msg.content}</div>
+        {/* 标签页导航 */}
+        <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+          {/* 标签页头部 */}
+          <div className="flex border-b border-gray-200">
+            {[
+              { key: 'insights', label: '洞察', icon: LayoutDashboard, desc: 'AI分析摘要' },
+              { key: 'charts', label: '图表', icon: PieChart, desc: '数据可视化' },
+              { key: 'explore', label: '探索', icon: MessageSquare, desc: '智能问答' },
+            ].map((tab) => (
+              <button
+                key={tab.key}
+                onClick={() => setActiveTab(tab.key as ResultTab)}
+                className={`flex-1 flex items-center justify-center gap-2 px-4 py-4 transition-all ${
+                  activeTab === tab.key 
+                    ? 'bg-blue-50 text-blue-600 border-b-2 border-blue-600' 
+                    : 'text-gray-500 hover:bg-gray-50'
+                }`}
+              >
+                <tab.icon className="w-5 h-5" />
+                <div className="text-left">
+                  <div className="font-medium">{tab.label}</div>
+                  <div className="text-xs opacity-70 hidden sm:block">{tab.desc}</div>
                 </div>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
-      )}
-    </motion.div>
-  );
+              </button>
+            ))}
+          </div>
+
+          {/* 标签页内容 */}
+          <div className="p-6">
+            <TabContent />
+          </div>
+        </div>
+      </motion.div>
+    );
+  };
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-blue-50/30">
@@ -460,13 +654,11 @@ export default function DataAnalystPage() {
             </div>
           </div>
           
-          <div className="flex items-center gap-4">
-            {currentStep !== 'upload' && (
-              <Button variant="outline" size="sm" onClick={handleClear}>
-                分析新文件
-              </Button>
-            )}
-          </div>
+          {currentStep === 'ready' && (
+            <Button variant="outline" size="sm" onClick={handleClear}>
+              分析新文件
+            </Button>
+          )}
         </div>
       </header>
 
@@ -489,7 +681,7 @@ export default function DataAnalystPage() {
             </motion.div>
           )}
           
-          {(currentStep === 'ready' || currentStep === 'querying') && (
+          {currentStep === 'ready' && (
             <motion.div key="results" exit={{ opacity: 0 }}>
               <ResultsView />
             </motion.div>
