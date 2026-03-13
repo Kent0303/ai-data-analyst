@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef, useCallback } from 'react';
+import { useState, useRef, useCallback, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
@@ -18,11 +18,13 @@ import {
   Loader2,
   BarChart3,
   ChevronDown,
-  MessageSquare
+  MessageSquare,
+  History
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import DataVisualization from '@/components/DataVisualization';
 import AIReportView from '@/components/AIReportView';
+import AnalysisHistory, { useAnalysisHistory, HistoryItem } from '@/components/AnalysisHistory';
 
 interface Message {
   role: 'user' | 'assistant';
@@ -53,6 +55,9 @@ export default function DataAnalystPage() {
   const [showModelSelect, setShowModelSelect] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  // 历史记录功能
+  const { addToHistory, history } = useAnalysisHistory();
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -181,6 +186,11 @@ export default function DataAnalystPage() {
         }]);
         // 将 AI 回复的报告显示在右侧
         setAiReport(result.response);
+        
+        // 保存到历史记录
+        if (files.length > 0) {
+          addToHistory(files[0].name, files[0].data, result.response);
+        }
       }
     } catch (error) {
       console.error('Chat error:', error);
@@ -197,6 +207,22 @@ export default function DataAnalystPage() {
 
   const removeFile = (index: number) => {
     setFiles(prev => prev.filter((_, i) => i !== index));
+  };
+
+  // 从历史记录加载
+  const handleSelectHistory = (item: HistoryItem) => {
+    const newFile: UploadedFile = {
+      name: item.fileName,
+      data: item.fileData,
+      size: 0
+    };
+    setFiles([newFile]);
+    setAiReport(item.report);
+    setMessages(prev => [...prev, {
+      role: 'assistant',
+      content: `已加载历史分析：${item.fileName}`,
+      type: 'text'
+    }]);
   };
 
   return (
@@ -313,6 +339,12 @@ export default function DataAnalystPage() {
           </div>
         </ScrollArea>
 
+        {/* 历史记录 */}
+        <AnalysisHistory 
+          onSelectHistory={handleSelectHistory}
+          currentFileName={files[0]?.name}
+        />
+
         {/* 底部输入区域 */}
         <div className="p-4 border-t border-gray-200">
           <div className="relative">
@@ -391,6 +423,7 @@ export default function DataAnalystPage() {
                 <AIReportView 
                   report={aiReport}
                   data={files[0]?.data || []}
+                  fileName={files[0]?.name}
                   onClear={() => setAiReport('')}
                 />
               )}
