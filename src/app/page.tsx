@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useMemo, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -28,7 +28,9 @@ import {
   Users,
   DollarSign,
   UserCheck,
-  Building2
+  Building2,
+  Bell,
+  ShieldAlert
 } from 'lucide-react';
 import DataVisualization from '@/components/DataVisualization';
 import AIReportView from '@/components/AIReportView';
@@ -36,7 +38,8 @@ import AnalysisHistory, { HistoryItem } from '@/components/AnalysisHistory';
 import SmartQuery from '@/components/SmartQuery';
 import LoadingAnimation from '@/components/LoadingAnimation';
 import MultiFileUpload, { UploadedFile } from '@/components/upload/MultiFileUpload';
-import { TableType, getTableTypeLabel, getTableTypeDescription } from '@/lib/tableRecognizer';
+import { AlertPanel } from '@/components/alerts';
+import { TableType, getTableTypeLabel, getTableTypeDescription, Member, EntryRecord, Booking, Consumption } from '@/lib/tableRecognizer';
 import { autoLinkTables, DataTable, LinkResult } from '@/lib/dataLinker';
 import { 
   generateAnalysisFramework, 
@@ -44,6 +47,7 @@ import {
   CombinedInsight,
   GeneratedAnalysis 
 } from '@/lib/analysisFramework';
+import { getAlertEngine, AlertDataSource } from '@/lib/alerts';
 
 interface Message {
   role: 'user' | 'assistant';
@@ -52,7 +56,7 @@ interface Message {
 }
 
 type Step = 'upload' | 'analyzing' | 'ready';
-type ResultTab = 'overview' | 'insights' | 'charts' | 'explore' | 'templates';
+type ResultTab = 'overview' | 'insights' | 'charts' | 'explore' | 'templates' | 'alerts';
 
 function MetricCard({ title, value, icon: Icon, color }: { title: string; value: string; icon: any; color: string }) {
   return (
@@ -212,6 +216,93 @@ export default function DataAnalystPage() {
   const [showModelSelect, setShowModelSelect] = useState(false);
   const [linkResult, setLinkResult] = useState<LinkResult | null>(null);
   const [analysisFramework, setAnalysisFramework] = useState<GeneratedAnalysis | null>(null);
+  const [alertCount, setAlertCount] = useState(0);
+  const alertEngine = useMemo(() => getAlertEngine(), []);
+
+  // 构建预警数据源
+  const alertDataSource: AlertDataSource | undefined = useMemo(() => {
+    if (files.length === 0) return undefined;
+    
+    // 从上传的文件中提取数据
+    const members: Member[] = [];
+    const entries: EntryRecord[] = [];
+    const bookings: Booking[] = [];
+    const consumptions: Consumption[] = [];
+    
+    files.forEach(file => {
+      const { tableInfo, data } = file;
+      const type = tableInfo.type;
+      if (type === 'member_list') {
+        data.forEach((row: any, idx: number) => {
+          members.push({
+            id: row.id || row.会员ID || `m${idx}`,
+            name: row.name || row.姓名 || row.会员姓名 || '',
+            phone: row.phone || row.手机号 || row.电话,
+            registerDate: row.registerDate || row.注册日期 || row.开卡日期 || new Date().toISOString(),
+            membershipExpiry: row.membershipExpiry || row.到期日期,
+            membershipType: row.membershipType || row.会员类型,
+            status: row.status || row.状态,
+            source: row.source || row.来源,
+            balance: row.balance || row.余额,
+          });
+        });
+      } else if (type === 'entry_record') {
+        data.forEach((row: any, idx: number) => {
+          entries.push({
+            id: row.id || `e${idx}`,
+            memberId: row.memberId || row.会员ID || '',
+            memberName: row.memberName || row.会员姓名,
+            entryTime: row.entryTime || row.进店时间 || row.入场时间 || new Date().toISOString(),
+            exitTime: row.exitTime || row.出场时间,
+            store: row.store || row.门店,
+          });
+        });
+      } else if (type === 'private_class_booking' || type === 'group_class_booking') {
+        data.forEach((row: any, idx: number) => {
+          bookings.push({
+            id: row.id || `b${idx}`,
+            memberId: row.memberId || row.会员ID || '',
+            memberName: row.memberName || row.会员姓名,
+            coachId: row.coachId || row.教练ID,
+            coachName: row.coachName || row.教练姓名 || row.教练,
+            type: type === 'private_class_booking' ? 'private' : 'group',
+            bookingTime: row.bookingTime || row.预约时间 || row.时间 || new Date().toISOString(),
+            duration: row.duration || row.时长 || 60,
+            className: row.className || row.课程名称,
+            status: row.status || row.状态,
+          });
+        });
+      } else if (type === 'consumption_record') {
+        data.forEach((row: any, idx: number) => {
+          consumptions.push({
+            id: row.id || `c${idx}`,
+            memberId: row.memberId || row.会员ID || '',
+            memberName: row.memberName || row.会员姓名,
+            amount: parseFloat(row.amount || row.金额 || row.消费金额 || 0),
+            type: row.type || (row.消费类型?.includes('私教') ? 'private_class' : 
+                             row.消费类型?.includes('团课') ? 'group_class' : 
+                             row.消费类型?.includes('卡') ? 'card' : 'other'),
+            date: row.date || row.消费日期 || row.日期 || new Date().toISOString(),
+            coachId: row.coachId || row.教练ID,
+            coachName: row.coachName || row.教练姓名,
+            itemName: row.itemName || row.项目名称 || row.商品名称,
+            paymentMethod: row.paymentMethod || row.支付方式,
+            sessions: row.sessions || row.课时数 || row.数量,
+          });
+        });
+      }
+    });
+    
+    return { members, entries, bookings, consumptions };
+  }, [files]);
+
+  // 更新预警数量
+  useEffect(() => {
+    if (alertDataSource) {
+      const stats = alertEngine.getAlertStats();
+      setAlertCount(stats.active);
+    }
+  }, [alertDataSource, alertEngine, activeTab]);
 
   const handleFilesUploaded = useCallback((uploadedFiles: UploadedFile[]) => {
     setFiles(uploadedFiles);
@@ -273,7 +364,16 @@ export default function DataAnalystPage() {
   };
 
   const handleSelectHistory = (item: HistoryItem) => { setCurrentStep('upload'); };
-  const handleClear = () => { setFiles([]); setMessages([]); setAiReport(''); setLinkResult(null); setAnalysisFramework(null); setCurrentStep('upload'); setActiveTab('overview'); };
+  const handleClear = () => { 
+    setFiles([]); 
+    setMessages([]); 
+    setAiReport(''); 
+    setLinkResult(null); 
+    setAnalysisFramework(null); 
+    setCurrentStep('upload'); 
+    setActiveTab('overview');
+    setAlertCount(0);
+  };
 
   const handleExport = () => {
     const reportContent = ['# 数据分析报告', '', `生成时间：${new Date().toLocaleString('zh-CN')}`, `分析文件：${files.map(f => f.name).join(', ')}`, '', '## 表格识别结果', ...files.map(f => `- ${f.name}: ${getTableTypeLabel(f.tableInfo.type)} (置信度: ${Math.round(f.tableInfo.confidence * 100)}%)`), '', '## 数据关联分析', ...(linkResult?.joinGraph.edges.map(e => { const fromFile = files.find(f => f.id === e.from); const toFile = files.find(f => f.id === e.to); return `- ${fromFile?.name} ↔ ${toFile?.name}: 通过 ${e.joinFields.join(', ')} 关联，匹配率 ${(e.matchRate * 100).toFixed(1)}%`; }) || ['未检测到关联关系']), '', '## AI 分析报告', aiReport, '', '---', '对话记录：', ...messages.map(m => `${m.role === 'user' ? '用户' : 'AI'}: ${m.content}`)].join('\n');
@@ -319,7 +419,7 @@ export default function DataAnalystPage() {
     <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="max-w-3xl mx-auto">
       <MultiFileUpload onFilesUploaded={handleFilesUploaded} maxFiles={10} maxFileSize={50} />
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-8">
-        {[{ icon: Upload, title: '多文件上传', desc: '支持同时上传多个Excel/CSV' }, { icon: Brain, title: '智能识别', desc: '自动识别表格类型' }, { icon: Link2, title: '自动关联', desc: '基于共同字段关联多表' }, { icon: Lightbulb, title: '智能推荐', desc: '推荐分析维度和框架' }].map((feature) => (
+        {[{ icon: Upload, title: '多文件上传', desc: '支持同时上传多个Excel/CSV' }, { icon: Brain, title: '智能识别', desc: '自动识别表格类型' }, { icon: Link2, title: '自动关联', desc: '基于共同字段关联多表' }, { icon: ShieldAlert, title: '智能预警', desc: '自动检测经营风险' }].map((feature) => (
           <div key={feature.title} className="text-center p-4">
             <div className="w-12 h-12 bg-gray-100 rounded-xl flex items-center justify-center mx-auto mb-3"><feature.icon className="w-6 h-6 text-gray-600" /></div>
             <h3 className="font-medium text-gray-800 mb-1">{feature.title}</h3>
@@ -414,7 +514,17 @@ export default function DataAnalystPage() {
         <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
           <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as ResultTab)}>
             <TabsList className="w-full justify-start rounded-none border-b bg-gray-50/50 p-0 h-auto">
-              {[{ key: 'overview', label: '概览', icon: LayoutDashboard }, { key: 'insights', label: '洞察', icon: Brain }, { key: 'charts', label: '图表', icon: PieChart }, { key: 'templates', label: '分析模板', icon: BarChart3 }, { key: 'explore', label: '探索', icon: MessageSquare }].map((tab) => <TabsTrigger key={tab.key} value={tab.key} className="flex-1 flex items-center justify-center gap-2 py-4 rounded-none data-[state=active]:bg-blue-50 data-[state=active]:text-blue-600 data-[state=active]:border-b-2 data-[state=active]:border-blue-600"><tab.icon className="w-4 h-4" /><span className="font-medium">{tab.label}</span></TabsTrigger>)}
+              {[{ key: 'overview', label: '概览', icon: LayoutDashboard }, { key: 'insights', label: '洞察', icon: Brain }, { key: 'charts', label: '图表', icon: PieChart }, { key: 'templates', label: '分析模板', icon: BarChart3 }, { key: 'explore', label: '探索', icon: MessageSquare }, { key: 'alerts', label: '智能预警', icon: Bell }].map((tab) => (
+                <TabsTrigger key={tab.key} value={tab.key} className="flex-1 flex items-center justify-center gap-2 py-4 rounded-none data-[state=active]:bg-blue-50 data-[state=active]:text-blue-600 data-[state=active]:border-b-2 data-[state=active]:border-blue-600 relative">
+                  <tab.icon className="w-4 h-4" />
+                  <span className="font-medium">{tab.label}</span>
+                  {tab.key === 'alerts' && alertCount > 0 && (
+                    <span className="absolute -top-1 -right-1 w-5 h-5 bg-red-500 rounded-full flex items-center justify-center text-white text-xs font-bold">
+                      {alertCount}
+                    </span>
+                  )}
+                </TabsTrigger>
+              ))}
             </TabsList>
             <div className="p-6">
               <TabsContent value="overview" className="mt-0"><OverviewTab /></TabsContent>
@@ -508,6 +618,12 @@ export default function DataAnalystPage() {
                   <SmartQuery onQuery={handleSmartQuery} isLoading={isLoading} />
                   {messages.length > 0 && <Card className="bg-gray-50 border-0"><CardContent className="p-4"><h3 className="font-medium text-gray-700 mb-4 flex items-center gap-2"><MessageSquare className="w-4 h-4" />对话记录 ({messages.length})</h3><div className="space-y-3 max-h-96 overflow-y-auto">{messages.map((msg, idx) => <div key={idx} className={`p-3 rounded-lg ${msg.role === 'user' ? 'bg-blue-100 ml-8' : 'bg-white mr-8 border border-gray-200'}`}><div className="flex items-center gap-2 mb-1"><span className={`text-xs font-medium ${msg.role === 'user' ? 'text-blue-700' : 'text-gray-500'}`}>{msg.role === 'user' ? '你' : 'AI 助手'}</span>{msg.type === 'analysis' && <Badge variant="secondary" className="text-xs"><Zap className="w-3 h-3 mr-1" />分析</Badge>}</div><div className="text-sm whitespace-pre-wrap">{msg.content}</div></div>)}</div></CardContent></Card>}
                 </div>
+              </TabsContent>
+              <TabsContent value="alerts" className="mt-0">
+                <AlertPanel dataSource={alertDataSource} onRefresh={() => {
+                  const stats = alertEngine.getAlertStats();
+                  setAlertCount(stats.active);
+                }} />
               </TabsContent>
             </div>
           </Tabs>
