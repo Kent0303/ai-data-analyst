@@ -370,7 +370,7 @@ export function AlertPanel({ dataSource, onRefresh }: AlertPanelProps) {
                 >
                   <CheckCircle2 className="w-12 h-12 mb-3 text-gray-300" />
                   <p>暂无预警</p>
-                  <p className="text-sm mt-1">点击"检测"按钮开始分析</p>
+                  <p className="text-sm mt-1">点击&quot;检测&quot;按钮开始分析</p>
                 </motion.div>
               )}
             </AnimatePresence>

@@ -359,7 +359,7 @@ export function CoachPerformanceTemplate({
             <Card>
               <CardContent className="py-12 text-center">
                 <Users className="w-12 h-12 mx-auto text-gray-300 mb-4" />
-                <p className="text-gray-500">请在"绩效概览"中选择一位教练查看负荷分析</p>
+                <p className="text-gray-500">请在&quot;绩效概览&quot;中选择一位教练查看负荷分析</p>
               </CardContent>
             </Card>
           )}

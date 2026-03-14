@@ -96,7 +96,7 @@ export class NLPProcessor {
     const intent = this.intentRecognizer.recognize(resolvedQuery);
 
     // 3. 实体提取
-    let entities = this.entityExtractor.extractAll(resolvedQuery);
+    const entities = this.entityExtractor.extractAll(resolvedQuery);
     
     // 合并上下文解析的实体
     if (resolvedEntities.time && !entities.time) {
