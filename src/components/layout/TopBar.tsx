@@ -98,12 +98,10 @@ export default function TopBar({ onMenuClick, isMobileMenuOpen }: TopBarProps) {
       <div className="flex items-center gap-2">
         {/* 模型选择 */}
         <DropdownMenu>
-          <DropdownMenuTrigger>
-            <Button variant="outline" size="sm" className="hidden sm:flex items-center gap-2">
-              <Sparkles className="w-4 h-4 text-blue-600" />
-              <span className="text-sm">{selectedModel === 'deepseek' ? 'DeepSeek' : 'Kimi'}</span>
-              <ChevronDown className="w-3 h-3" />
-            </Button>
+          <DropdownMenuTrigger className="hidden sm:flex items-center gap-2 px-3 py-1.5 text-sm font-medium rounded-md border border-gray-300 bg-white hover:bg-gray-50 transition-colors">
+            <Sparkles className="w-4 h-4 text-blue-600" />
+            <span>{selectedModel === 'deepseek' ? 'DeepSeek' : 'Kimi'}</span>
+            <ChevronDown className="w-3 h-3" />
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
             <DropdownMenuItem onClick={() => setSelectedModel('deepseek')}>
@@ -143,12 +141,10 @@ export default function TopBar({ onMenuClick, isMobileMenuOpen }: TopBarProps) {
 
         {/* 用户菜单 */}
         <DropdownMenu>
-          <DropdownMenuTrigger>
-            <Button variant="ghost" size="icon" className="rounded-full">
-              <div className="w-8 h-8 bg-gradient-to-br from-gray-100 to-gray-200 rounded-full flex items-center justify-center border border-gray-200">
-                <User className="w-4 h-4 text-gray-600" />
-              </div>
-            </Button>
+          <DropdownMenuTrigger className="p-2 rounded-full hover:bg-gray-100 transition-colors">
+            <div className="w-8 h-8 bg-gradient-to-br from-gray-100 to-gray-200 rounded-full flex items-center justify-center border border-gray-200">
+              <User className="w-4 h-4 text-gray-600" />
+            </div>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-48">
             <div className="px-3 py-2">
