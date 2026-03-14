@@ -36,6 +36,7 @@ import DataVisualization from '@/components/DataVisualization';
 import AIReportView from '@/components/AIReportView';
 import AnalysisHistory, { HistoryItem } from '@/components/AnalysisHistory';
 import SmartQuery from '@/components/SmartQuery';
+import EnhancedSmartQuery from '@/components/EnhancedSmartQuery';
 import LoadingAnimation from '@/components/LoadingAnimation';
 import MultiFileUpload, { UploadedFile } from '@/components/upload/MultiFileUpload';
 import { AlertPanel } from '@/components/alerts';
@@ -363,6 +364,46 @@ export default function DataAnalystPage() {
     }
   };
 
+  // 增强智能查询处理
+  const handleEnhancedQuery = async (
+    query: string, 
+    context: { intent: string; entities: any }
+  ): Promise<string> => {
+    if (files.length === 0) return '请先上传数据文件';
+    
+    try {
+      const response = await fetch('/api/chat', {
+        method: 'POST', 
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          messages: [{ role: 'user', content: query }], 
+          data: { 
+            files: files.map(f => ({ 
+              fileName: f.name, 
+              headers: f.headers, 
+              rowCount: f.rowCount, 
+              sampleData: f.data.slice(1, 5), 
+              type: f.tableInfo.type 
+            })), 
+            linkResult, 
+            analysisFramework 
+          }, 
+          model: selectedModel, 
+          query,
+          nlpContext: context // 传递NLP上下文
+        })
+      });
+      const result = await response.json();
+      if (result.success) {
+        return result.response;
+      }
+      return '抱歉，处理您的请求时出现问题';
+    } catch (error) {
+      console.error('Enhanced query error:', error);
+      return '抱歉，处理您的请求时出现错误';
+    }
+  };
+
   const handleSelectHistory = (item: HistoryItem) => { setCurrentStep('upload'); };
   const handleClear = () => { 
     setFiles([]); 
@@ -615,8 +656,11 @@ export default function DataAnalystPage() {
               </TabsContent>
               <TabsContent value="explore" className="mt-0">
                 <div className="space-y-6">
-                  <SmartQuery onQuery={handleSmartQuery} isLoading={isLoading} />
-                  {messages.length > 0 && <Card className="bg-gray-50 border-0"><CardContent className="p-4"><h3 className="font-medium text-gray-700 mb-4 flex items-center gap-2"><MessageSquare className="w-4 h-4" />对话记录 ({messages.length})</h3><div className="space-y-3 max-h-96 overflow-y-auto">{messages.map((msg, idx) => <div key={idx} className={`p-3 rounded-lg ${msg.role === 'user' ? 'bg-blue-100 ml-8' : 'bg-white mr-8 border border-gray-200'}`}><div className="flex items-center gap-2 mb-1"><span className={`text-xs font-medium ${msg.role === 'user' ? 'text-blue-700' : 'text-gray-500'}`}>{msg.role === 'user' ? '你' : 'AI 助手'}</span>{msg.type === 'analysis' && <Badge variant="secondary" className="text-xs"><Zap className="w-3 h-3 mr-1" />分析</Badge>}</div><div className="text-sm whitespace-pre-wrap">{msg.content}</div></div>)}</div></CardContent></Card>}
+                  <EnhancedSmartQuery 
+                    onQuery={handleEnhancedQuery} 
+                    isLoading={isLoading}
+                    sessionId="main-session"
+                  />
                 </div>
               </TabsContent>
               <TabsContent value="alerts" className="mt-0">
