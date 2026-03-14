@@ -103,7 +103,7 @@ const defaultChartConfig: ChartConfig = {
   filters: [],
 };
 
-const defaultKPIConfigs: KPIConfig[] = [
+const getDefaultKPIConfigs = (): KPIConfig[] => [
   { id: 'kpi-1', title: '总收入', field: 'amount', aggregation: 'sum', format: 'currency', prefix: '¥', color: 'bg-blue-500' },
   { id: 'kpi-2', title: '会员总数', field: 'memberId', aggregation: 'count', format: 'number', color: 'bg-green-500' },
   { id: 'kpi-3', title: '平均消费', field: 'amount', aggregation: 'avg', format: 'currency', prefix: '¥', color: 'bg-purple-500' },
@@ -113,17 +113,17 @@ const defaultKPIConfigs: KPIConfig[] = [
 const DashboardContext = createContext<DashboardContextType | undefined>(undefined);
 
 export function DashboardProvider({ children }: { children: ReactNode }) {
-  const [state, setState] = useState<DashboardState>({
+  const [state, setState] = useState<DashboardState>(() => ({
     dataSources: [],
     selectedDataSource: null,
-    kpiConfigs: defaultKPIConfigs,
+    kpiConfigs: getDefaultKPIConfigs(),
     chartConfig: defaultChartConfig,
     globalFilters: [],
     aiMessages: [],
     isAILoading: false,
     selectedModel: 'deepseek',
     alertCount: 0,
-  });
+  }));
 
   const setDataSources = (sources: DataSource[]) => {
     setState(prev => ({ ...prev, dataSources: sources }));
@@ -192,7 +192,7 @@ export function DashboardProvider({ children }: { children: ReactNode }) {
     setState({
       dataSources: [],
       selectedDataSource: null,
-      kpiConfigs: defaultKPIConfigs,
+      kpiConfigs: getDefaultKPIConfigs(),
       chartConfig: defaultChartConfig,
       globalFilters: [],
       aiMessages: [],

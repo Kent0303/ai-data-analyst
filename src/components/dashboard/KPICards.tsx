@@ -33,8 +33,8 @@ export default function KPICards() {
   // 模拟计算KPI数据（实际应用中应该根据真实数据计算）
   const kpiData: KPIData[] = useMemo(() => {
     // 如果有数据源，根据数据源计算
-    if (dataSources.length > 0) {
-      const totalRows = dataSources.reduce((sum, s) => sum + s.rowCount, 0);
+    if (dataSources && dataSources.length > 0) {
+      const totalRows = dataSources.reduce((sum, s) => sum + (s.rowCount || 0), 0);
       
       return [
         {
@@ -58,7 +58,7 @@ export default function KPICards() {
         {
           id: '3',
           title: '字段总数',
-          value: dataSources.reduce((sum, s) => sum + s.headers.length, 0).toString(),
+          value: dataSources.reduce((sum, s) => sum + (s.headers?.length || 0), 0).toString(),
           icon: Target,
           color: 'bg-purple-500',
         },
@@ -74,21 +74,44 @@ export default function KPICards() {
       ];
     }
 
-    // 默认展示配置中的KPI
-    return kpiConfigs.map((kpi, index) => ({
-      id: kpi.id,
-      title: kpi.title,
-      value: kpi.format === 'currency' 
-        ? `${kpi.prefix || '¥'}0` 
-        : kpi.format === 'percentage' 
-          ? `0${kpi.suffix || '%'}` 
-          : '0',
-      change: index % 2 === 0 ? 12.5 : -5.2,
-      changeLabel: '较上期',
-      icon: [DollarSign, Users, Activity, Target][index % 4],
-      color: kpi.color,
-    }));
-  }, [kpiConfigs, dataSources]);
+    // 默认展示静态KPI
+    return [
+      {
+        id: '1',
+        title: '数据总量',
+        value: '0',
+        change: 0,
+        changeLabel: '较上周',
+        icon: BarChart3,
+        color: 'bg-blue-500',
+      },
+      {
+        id: '2',
+        title: '数据源',
+        value: '0',
+        change: 0,
+        changeLabel: '新增',
+        icon: Activity,
+        color: 'bg-green-500',
+      },
+      {
+        id: '3',
+        title: '字段总数',
+        value: '0',
+        icon: Target,
+        color: 'bg-purple-500',
+      },
+      {
+        id: '4',
+        title: '分析维度',
+        value: '8',
+        change: 0,
+        changeLabel: '较上月',
+        icon: Calendar,
+        color: 'bg-orange-500',
+      },
+    ];
+  }, [dataSources]);
 
   const containerVariants = {
     hidden: { opacity: 0 },
