@@ -46,6 +46,7 @@ interface DataSource {
   type: 'member_list' | 'consumption_record' | 'entry_record' | 'group_class_booking' | 'private_class_booking' | 'unknown';
   rowCount: number;
   headers: string[];
+  data: any[][]; // 实际数据
 }
 
 // 布局状态
@@ -72,6 +73,9 @@ interface DashboardState {
   
   // 预警
   alertCount: number;
+  
+  // 当前选中的分析模板
+  selectedTemplate: string | null;
 }
 
 interface DashboardContextType extends DashboardState {
@@ -89,6 +93,10 @@ interface DashboardContextType extends DashboardState {
   setSelectedModel: (model: 'deepseek' | 'kimi') => void;
   setAlertCount: (count: number) => void;
   clearDashboard: () => void;
+  
+  // 当前选中的分析模板
+  selectedTemplate: string | null;
+  setSelectedTemplate: (template: string | null) => void;
 }
 
 const getDefaultChartConfig = (): ChartConfig => ({
@@ -123,6 +131,7 @@ export function DashboardProvider({ children }: { children: ReactNode }) {
     isAILoading: false,
     selectedModel: 'deepseek',
     alertCount: 0,
+    selectedTemplate: null,
   }));
 
   const setDataSources = (sources: DataSource[]) => {
@@ -199,7 +208,12 @@ export function DashboardProvider({ children }: { children: ReactNode }) {
       isAILoading: false,
       selectedModel: 'deepseek',
       alertCount: 0,
+      selectedTemplate: null,
     });
+  };
+
+  const setSelectedTemplate = (template: string | null) => {
+    setState(prev => ({ ...prev, selectedTemplate: template }));
   };
 
   return (
@@ -219,6 +233,8 @@ export function DashboardProvider({ children }: { children: ReactNode }) {
         setSelectedModel,
         setAlertCount,
         clearDashboard,
+        selectedTemplate: state.selectedTemplate,
+        setSelectedTemplate,
       }}
     >
       {children}

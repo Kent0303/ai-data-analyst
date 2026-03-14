@@ -51,6 +51,7 @@ function PageContent() {
         type: file.tableInfo.type,
         rowCount: file.rowCount,
         headers: file.headers,
+        data: file.data,
       }));
       setDataSources(sources);
     }

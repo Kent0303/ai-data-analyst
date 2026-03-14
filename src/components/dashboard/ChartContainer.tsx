@@ -52,12 +52,12 @@ export default function ChartContainer() {
   const currentData = React.useMemo(() => {
     if (!selectedDataSource) return null;
     const source = dataSources.find(s => s.id === selectedDataSource);
-    return source ? [source.headers, ...([] as any[])] : null;
+    return source?.data || null;
   }, [dataSources, selectedDataSource]);
 
   // 获取第一个数据源作为默认展示
   const defaultDataSource = dataSources[0];
-  const displayData = currentData || (defaultDataSource ? [defaultDataSource.headers, ...([] as any[])] : null);
+  const displayData = currentData || defaultDataSource?.data || null;
 
   const handleRefresh = () => {
     setIsRefreshing(true);

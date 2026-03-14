@@ -69,7 +69,7 @@ export default function LeftSidebar({
   onTemplateClick, 
   onAlertClick 
 }: LeftSidebarProps) {
-  const { dataSources, alertCount, selectedDataSource, selectDataSource } = useDashboard();
+  const { dataSources, alertCount, selectedDataSource, selectDataSource, selectedTemplate, setSelectedTemplate } = useDashboard();
 
   const [expandedSections, setExpandedSections] = React.useState({
     dataSources: true,
@@ -182,8 +182,15 @@ export default function LeftSidebar({
               {ANALYSIS_TEMPLATES.map((template) => (
                 <button
                   key={template.id}
-                  onClick={() => onTemplateClick?.()}
-                  className="w-full flex items-center gap-2 p-2 rounded-lg text-left hover:bg-gray-50 transition-colors"
+                  onClick={() => {
+                    setSelectedTemplate(template.id === selectedTemplate ? null : template.id);
+                    onTemplateClick?.();
+                  }}
+                  className={`w-full flex items-center gap-2 p-2 rounded-lg text-left transition-colors ${
+                    selectedTemplate === template.id 
+                      ? 'bg-blue-50 border border-blue-200' 
+                      : 'hover:bg-gray-50 border border-transparent'
+                  }`}
                 >
                   <div className={`w-7 h-7 ${template.bgColor} rounded-lg flex items-center justify-center flex-shrink-0`}>
                     <template.icon className={`w-3.5 h-3.5 ${template.color}`} />
