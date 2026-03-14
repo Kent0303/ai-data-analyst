@@ -24,7 +24,11 @@ import {
   CheckCircle2,
   AlertCircle,
   Table2,
-  ArrowRight
+  ArrowRight,
+  Users,
+  DollarSign,
+  UserCheck,
+  Building2
 } from 'lucide-react';
 import DataVisualization from '@/components/DataVisualization';
 import AIReportView from '@/components/AIReportView';
@@ -48,7 +52,7 @@ interface Message {
 }
 
 type Step = 'upload' | 'analyzing' | 'ready';
-type ResultTab = 'overview' | 'insights' | 'charts' | 'explore';
+type ResultTab = 'overview' | 'insights' | 'charts' | 'explore' | 'templates';
 
 function MetricCard({ title, value, icon: Icon, color }: { title: string; value: string; icon: any; color: string }) {
   return (
@@ -410,12 +414,95 @@ export default function DataAnalystPage() {
         <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
           <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as ResultTab)}>
             <TabsList className="w-full justify-start rounded-none border-b bg-gray-50/50 p-0 h-auto">
-              {[{ key: 'overview', label: '概览', icon: LayoutDashboard }, { key: 'insights', label: '洞察', icon: Brain }, { key: 'charts', label: '图表', icon: PieChart }, { key: 'explore', label: '探索', icon: MessageSquare }].map((tab) => <TabsTrigger key={tab.key} value={tab.key} className="flex-1 flex items-center justify-center gap-2 py-4 rounded-none data-[state=active]:bg-blue-50 data-[state=active]:text-blue-600 data-[state=active]:border-b-2 data-[state=active]:border-blue-600"><tab.icon className="w-4 h-4" /><span className="font-medium">{tab.label}</span></TabsTrigger>)}
+              {[{ key: 'overview', label: '概览', icon: LayoutDashboard }, { key: 'insights', label: '洞察', icon: Brain }, { key: 'charts', label: '图表', icon: PieChart }, { key: 'templates', label: '分析模板', icon: BarChart3 }, { key: 'explore', label: '探索', icon: MessageSquare }].map((tab) => <TabsTrigger key={tab.key} value={tab.key} className="flex-1 flex items-center justify-center gap-2 py-4 rounded-none data-[state=active]:bg-blue-50 data-[state=active]:text-blue-600 data-[state=active]:border-b-2 data-[state=active]:border-blue-600"><tab.icon className="w-4 h-4" /><span className="font-medium">{tab.label}</span></TabsTrigger>)}
             </TabsList>
             <div className="p-6">
               <TabsContent value="overview" className="mt-0"><OverviewTab /></TabsContent>
               <TabsContent value="insights" className="mt-0">{aiReport && <AIReportView report={aiReport} data={files[0]?.data || []} fileName={files[0]?.name} onClear={() => setAiReport('')} />}</TabsContent>
               <TabsContent value="charts" className="mt-0"><div className="space-y-6">{files.map((file, index) => <DataVisualization key={index} data={file.data} fileName={file.name} />)}</div></TabsContent>
+              <TabsContent value="templates" className="mt-0">
+                <div className="space-y-6">
+                  <Card>
+                    <CardContent className="p-6">
+                      <div className="flex items-center gap-3 mb-4">
+                        <BarChart3 className="w-6 h-6 text-blue-600" />
+                        <h2 className="text-lg font-bold">健身房专属分析模板</h2>
+                      </div>
+                      <p className="text-gray-600 mb-6">基于上传的数据，我们为您准备了以下专业分析模板。请在每个模板卡片中查看详细分析。</p>
+                      <div className="grid grid-cols-1 gap-6">
+                        <Card className="border-blue-200">
+                          <CardHeader className="bg-blue-50">
+                            <CardTitle className="flex items-center gap-2 text-blue-800">
+                              <Users className="w-5 h-5" />
+                              会员生命周期分析
+                            </CardTitle>
+                          </CardHeader>
+                          <CardContent className="p-4">
+                            <p className="text-gray-600 mb-4">分析会员从获取到流失的全生命周期，包括新客转化、活跃度、留存率和流失预警。</p>
+                            <div className="flex gap-2 flex-wrap">
+                              <Badge variant="outline">新客获取</Badge>
+                              <Badge variant="outline">会员激活</Badge>
+                              <Badge variant="outline">留存分析</Badge>
+                              <Badge variant="outline">流失预警</Badge>
+                            </div>
+                          </CardContent>
+                        </Card>
+                        <Card className="border-green-200">
+                          <CardHeader className="bg-green-50">
+                            <CardTitle className="flex items-center gap-2 text-green-800">
+                              <DollarSign className="w-5 h-5" />
+                              营收健康度仪表盘
+                            </CardTitle>
+                          </CardHeader>
+                          <CardContent className="p-4">
+                            <p className="text-gray-600 mb-4">全面展示健身房营收状况，包括收入构成、趋势分析、对比分析和目标达成进度。</p>
+                            <div className="flex gap-2 flex-wrap">
+                              <Badge variant="outline">收入构成</Badge>
+                              <Badge variant="outline">趋势分析</Badge>
+                              <Badge variant="outline">同比环比</Badge>
+                              <Badge variant="outline">目标达成</Badge>
+                            </div>
+                          </CardContent>
+                        </Card>
+                        <Card className="border-purple-200">
+                          <CardHeader className="bg-purple-50">
+                            <CardTitle className="flex items-center gap-2 text-purple-800">
+                              <UserCheck className="w-5 h-5" />
+                              教练绩效分析
+                            </CardTitle>
+                          </CardHeader>
+                          <CardContent className="p-4">
+                            <p className="text-gray-600 mb-4">评估教练团队表现，包括课时统计、收入贡献、会员满意度和工作负荷分析。</p>
+                            <div className="flex gap-2 flex-wrap">
+                              <Badge variant="outline">课时统计</Badge>
+                              <Badge variant="outline">收入贡献</Badge>
+                              <Badge variant="outline">满意度</Badge>
+                              <Badge variant="outline">负荷分析</Badge>
+                            </div>
+                          </CardContent>
+                        </Card>
+                        <Card className="border-orange-200">
+                          <CardHeader className="bg-orange-50">
+                            <CardTitle className="flex items-center gap-2 text-orange-800">
+                              <Building2 className="w-5 h-5" />
+                              场地利用率分析
+                            </CardTitle>
+                          </CardHeader>
+                          <CardContent className="p-4">
+                            <p className="text-gray-600 mb-4">优化场地资源配置，分析高峰时段、课程饱和度和设备使用效率。</p>
+                            <div className="flex gap-2 flex-wrap">
+                              <Badge variant="outline">高峰时段</Badge>
+                              <Badge variant="outline">课程饱和度</Badge>
+                              <Badge variant="outline">设备效率</Badge>
+                              <Badge variant="outline">资源优化</Badge>
+                            </div>
+                          </CardContent>
+                        </Card>
+                      </div>
+                    </CardContent>
+                  </Card>
+                </div>
+              </TabsContent>
               <TabsContent value="explore" className="mt-0">
                 <div className="space-y-6">
                   <SmartQuery onQuery={handleSmartQuery} isLoading={isLoading} />

@@ -297,3 +297,59 @@ export function getTableTypeDescription(type: TableType): string {
   };
   return descriptions[type] || '';
 }
+
+// ============ 数据类型定义 ============
+
+export interface Member {
+  id: string;
+  name: string;
+  phone?: string;
+  cardNo?: string;
+  gender?: string;
+  age?: number;
+  registerDate: string;
+  membershipExpiry?: string;
+  membershipType?: string;
+  status?: string;
+  source?: string;
+  [key: string]: any;
+}
+
+export interface Consumption {
+  id: string;
+  memberId: string;
+  memberName?: string;
+  amount: number;
+  type: 'card' | 'private_class' | 'group_class' | 'other';
+  date: string;
+  coachId?: string;
+  coachName?: string;
+  itemName?: string;
+  paymentMethod?: string;
+  [key: string]: any;
+}
+
+export interface EntryRecord {
+  id: string;
+  memberId: string;
+  memberName?: string;
+  entryTime: string;
+  exitTime?: string;
+  store?: string;
+  [key: string]: any;
+}
+
+export interface Booking {
+  id: string;
+  memberId: string;
+  memberName?: string;
+  coachId?: string;
+  coachName?: string;
+  type: 'group' | 'private';
+  bookingTime: string;
+  duration?: number;
+  attendees?: number;
+  className?: string;
+  status?: string;
+  [key: string]: any;
+}
