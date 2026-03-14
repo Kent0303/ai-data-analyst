@@ -1,37 +1,45 @@
 'use client';
 
-import { useState, useRef, useCallback, useEffect } from 'react';
+import { useState, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Card, CardContent } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { ScrollArea } from '@/components/ui/scroll-area';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { 
   Upload, 
   FileSpreadsheet, 
-  X, 
+  X,
   Sparkles,
   BarChart3,
   ChevronRight,
-  MessageCircle,
-  TrendingUp,
-  Users,
-  Target,
   Brain,
-  ArrowRight,
   LayoutDashboard,
   PieChart,
   MessageSquare,
   Download,
-  Loader2,
-  Zap
+  Zap,
+  Link2,
+  Lightbulb,
+  CheckCircle2,
+  AlertCircle,
+  Table2,
+  ArrowRight
 } from 'lucide-react';
-import * as XLSX from 'xlsx';
 import DataVisualization from '@/components/DataVisualization';
 import AIReportView from '@/components/AIReportView';
-import AnalysisHistory, { useAnalysisHistory, HistoryItem } from '@/components/AnalysisHistory';
+import AnalysisHistory, { HistoryItem } from '@/components/AnalysisHistory';
 import SmartQuery from '@/components/SmartQuery';
 import LoadingAnimation from '@/components/LoadingAnimation';
+import MultiFileUpload, { UploadedFile } from '@/components/upload/MultiFileUpload';
+import { TableType, getTableTypeLabel, getTableTypeDescription } from '@/lib/tableRecognizer';
+import { autoLinkTables, DataTable, LinkResult } from '@/lib/dataLinker';
+import { 
+  generateAnalysisFramework, 
+  AnalysisFramework, 
+  CombinedInsight,
+  GeneratedAnalysis 
+} from '@/lib/analysisFramework';
 
 interface Message {
   role: 'user' | 'assistant';
@@ -39,31 +47,10 @@ interface Message {
   type?: 'text' | 'analysis' | 'suggestion';
 }
 
-interface UploadedFile {
-  name: string;
-  data: any[][];
-  size: number;
-}
-
 type Step = 'upload' | 'analyzing' | 'ready';
-type ResultTab = 'insights' | 'charts' | 'explore';
+type ResultTab = 'overview' | 'insights' | 'charts' | 'explore';
 
-// 关键指标卡片组件
-function MetricCard({ 
-  title, 
-  value, 
-  trend, 
-  trendUp, 
-  icon: Icon,
-  color 
-}: { 
-  title: string; 
-  value: string; 
-  trend?: string; 
-  trendUp?: boolean;
-  icon: any;
-  color: string;
-}) {
+function MetricCard({ title, value, icon: Icon, color }: { title: string; value: string; icon: any; color: string }) {
   return (
     <Card className="hover:shadow-lg transition-shadow">
       <CardContent className="p-4">
@@ -71,12 +58,6 @@ function MetricCard({
           <div>
             <p className="text-sm text-gray-500 mb-1">{title}</p>
             <p className="text-2xl font-bold text-gray-900">{value}</p>
-            {trend && (
-              <p className={`text-xs mt-1 flex items-center gap-1 ${trendUp ? 'text-green-600' : 'text-red-600'}`}>
-                <TrendingUp className={`w-3 h-3 ${!trendUp && 'rotate-180'}`} />
-                {trend}
-              </p>
-            )}
           </div>
           <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${color}`}>
             <Icon className="w-5 h-5 text-white" />
@@ -87,139 +68,197 @@ function MetricCard({
   );
 }
 
+function TableTypeBadge({ type, confidence }: { type: TableType; confidence: number }) {
+  const colors: Record<TableType, string> = {
+    member_list: 'bg-blue-100 text-blue-700 border-blue-200',
+    consumption_record: 'bg-green-100 text-green-700 border-green-200',
+    entry_record: 'bg-purple-100 text-purple-700 border-purple-200',
+    group_class_booking: 'bg-orange-100 text-orange-700 border-orange-200',
+    private_class_booking: 'bg-pink-100 text-pink-700 border-pink-200',
+    unknown: 'bg-gray-100 text-gray-700 border-gray-200',
+  };
+  return (
+    <Badge variant="outline" className={`${colors[type]} text-xs`}>
+      {getTableTypeLabel(type)}
+      {confidence > 0 && <span className="ml-1 opacity-70">{Math.round(confidence * 100)}%</span>}
+    </Badge>
+  );
+}
+
+function LinkGraphView({ joinGraph, files }: { joinGraph: NonNullable<LinkResult['joinGraph']>; files: UploadedFile[] }) {
+  if (joinGraph.edges.length === 0) {
+    return (
+      <div className="text-center py-8 text-gray-500">
+        <AlertCircle className="w-12 h-12 mx-auto mb-3 text-gray-300" />
+        <p>未检测到表格间的关联关系</p>
+        <p className="text-sm mt-1">表格缺少可用于关联的共同字段（如会员ID、手机号等）</p>
+      </div>
+    );
+  }
+  return (
+    <div className="space-y-4">
+      <div className="flex flex-wrap gap-4">
+        {joinGraph.nodes.map((node) => {
+          const file = files.find(f => f.id === node.tableId);
+          return (
+            <div key={node.tableId} className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
+              <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
+                <Table2 className="w-5 h-5 text-blue-600" />
+              </div>
+              <div>
+                <p className="font-medium text-sm">{node.tableName}</p>
+                <p className="text-xs text-gray-500">{node.rowCount.toLocaleString()} 行 · {node.fieldCount} 列</p>
+              </div>
+              {file && <TableTypeBadge type={file.tableInfo.type} confidence={file.tableInfo.confidence} />}
+            </div>
+          );
+        })}
+      </div>
+      <div className="border-t pt-4">
+        <p className="text-sm font-medium text-gray-700 mb-3 flex items-center gap-2">
+          <Link2 className="w-4 h-4" />检测到的关联关系
+        </p>
+        <div className="space-y-2">
+          {joinGraph.edges.map((edge, idx) => {
+            const fromFile = files.find(f => f.id === edge.from);
+            const toFile = files.find(f => f.id === edge.to);
+            return (
+              <div key={idx} className="flex items-center gap-3 p-3 bg-green-50 rounded-lg border border-green-100">
+                <div className="flex-1">
+                  <div className="flex items-center gap-2">
+                    <span className="font-medium text-sm">{fromFile?.name}</span>
+                    <ArrowRight className="w-4 h-4 text-gray-400" />
+                    <span className="font-medium text-sm">{toFile?.name}</span>
+                  </div>
+                  <p className="text-xs text-gray-600 mt-1">
+                    关联字段: {edge.joinFields.join(' ↔ ')} · 匹配率: <span className="font-medium text-green-700">{(edge.matchRate * 100).toFixed(1)}%</span>
+                  </p>
+                </div>
+                <CheckCircle2 className="w-5 h-5 text-green-600" />
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function FrameworkCard({ framework }: { framework: AnalysisFramework }) {
+  return (
+    <Card className="hover:shadow-md transition-shadow">
+      <CardContent className="p-4">
+        <div className="flex items-start justify-between mb-3">
+          <div>
+            <h4 className="font-semibold text-gray-800">{framework.name}</h4>
+            <p className="text-sm text-gray-500">{framework.description}</p>
+          </div>
+          <Badge variant="secondary" className="text-xs">优先级 {framework.priority}</Badge>
+        </div>
+        <div className="grid grid-cols-2 gap-4 text-sm">
+          <div>
+            <p className="text-gray-500 mb-1">分析维度</p>
+            <div className="flex flex-wrap gap-1">
+              {framework.dimensions.slice(0, 3).map((d, i) => <Badge key={i} variant="outline" className="text-xs">{d.name}</Badge>)}
+              {framework.dimensions.length > 3 && <Badge variant="outline" className="text-xs">+{framework.dimensions.length - 3}</Badge>}
+            </div>
+          </div>
+          <div>
+            <p className="text-gray-500 mb-1">关键指标</p>
+            <div className="flex flex-wrap gap-1">
+              {framework.metrics.slice(0, 3).map((m, i) => <Badge key={i} variant="outline" className="text-xs">{m.name}</Badge>)}
+              {framework.metrics.length > 3 && <Badge variant="outline" className="text-xs">+{framework.metrics.length - 3}</Badge>}
+            </div>
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+function CombinedInsightCard({ insight }: { insight: CombinedInsight }) {
+  const typeLabels: Record<CombinedInsight['analysisType'], string> = {
+    trend: '趋势分析', comparison: '对比分析', distribution: '分布分析', correlation: '关联分析', anomaly: '异常检测', funnel: '漏斗分析',
+  };
+  return (
+    <Card className="hover:shadow-md transition-shadow border-l-4 border-l-purple-500">
+      <CardContent className="p-4">
+        <div className="flex items-start justify-between mb-2">
+          <h4 className="font-semibold text-gray-800">{insight.title}</h4>
+          <Badge className="text-xs bg-purple-100 text-purple-700">{typeLabels[insight.analysisType]}</Badge>
+        </div>
+        <p className="text-sm text-gray-600 mb-3">{insight.description}</p>
+        <div className="flex items-center gap-2">
+          <span className="text-xs text-gray-500">涉及表格:</span>
+          {insight.relatedTables.map((table, i) => <Badge key={i} variant="outline" className="text-xs">{getTableTypeLabel(table as TableType)}</Badge>)}
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
 export default function DataAnalystPage() {
   const [files, setFiles] = useState<UploadedFile[]>([]);
   const [messages, setMessages] = useState<Message[]>([]);
   const [currentStep, setCurrentStep] = useState<Step>('upload');
-  const [activeTab, setActiveTab] = useState<ResultTab>('insights');
+  const [activeTab, setActiveTab] = useState<ResultTab>('overview');
   const [isLoading, setIsLoading] = useState(false);
   const [selectedModel, setSelectedModel] = useState<'deepseek' | 'kimi'>('deepseek');
   const [aiReport, setAiReport] = useState<string>('');
   const [showModelSelect, setShowModelSelect] = useState(false);
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [linkResult, setLinkResult] = useState<LinkResult | null>(null);
+  const [analysisFramework, setAnalysisFramework] = useState<GeneratedAnalysis | null>(null);
 
-  const { addToHistory } = useAnalysisHistory();
-
-  // 处理文件上传
-  const handleFileUpload = useCallback((event: React.ChangeEvent<HTMLInputElement>) => {
-    const uploadedFiles = event.target.files;
-    if (!uploadedFiles) return;
-
-    Array.from(uploadedFiles).forEach(file => {
-      if (!file.name.endsWith('.xlsx') && !file.name.endsWith('.xls')) {
-        alert('请上传 Excel 文件 (.xlsx 或 .xls)');
-        return;
-      }
-
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        try {
-          const data = e.target?.result;
-          const workbook = XLSX.read(data, { type: 'binary' });
-          const sheetName = workbook.SheetNames[0];
-          const worksheet = workbook.Sheets[sheetName];
-          const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
-
-          const newFile = {
-            name: file.name,
-            data: jsonData as any[][],
-            size: file.size
-          };
-
-          setFiles([newFile]);
-          setCurrentStep('analyzing');
-          
-          // 自动分析
-          analyzeData(newFile);
-        } catch (error) {
-          console.error('File parsing error:', error);
-          alert('文件解析失败，请检查文件格式');
-        }
-      };
-      reader.readAsBinaryString(file);
-    });
-
-    if (fileInputRef.current) {
-      fileInputRef.current.value = '';
+  const handleFilesUploaded = useCallback((uploadedFiles: UploadedFile[]) => {
+    setFiles(uploadedFiles);
+    if (uploadedFiles.length > 0) {
+      setCurrentStep('analyzing');
+      performDataAnalysis(uploadedFiles);
     }
   }, []);
 
-  // 分析数据
-  const analyzeData = async (file: UploadedFile) => {
+  const performDataAnalysis = async (uploadedFiles: UploadedFile[]) => {
     setIsLoading(true);
     try {
+      const dataTables: DataTable[] = uploadedFiles.map(file => ({
+        id: file.id, name: file.name, type: file.tableInfo.type, headers: file.headers, data: file.data, rowCount: file.rowCount,
+      }));
+      const linkResult = autoLinkTables(dataTables);
+      setLinkResult(linkResult);
+      const framework = generateAnalysisFramework(dataTables, linkResult.linkedTables, linkResult.joinGraph);
+      setAnalysisFramework(framework);
       const response = await fetch('/api/analyze', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          files: [file],
-          model: selectedModel
-        })
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ files: uploadedFiles.map(f => ({ name: f.name, data: f.data, type: f.tableInfo.type })), linkResult, framework, model: selectedModel })
       });
-
       const result = await response.json();
-      
       if (result.success) {
         setAiReport(result.suggestions);
-        setMessages([{
-          role: 'assistant',
-          content: result.suggestions,
-          type: 'analysis'
-        }]);
+        setMessages([{ role: 'assistant', content: result.suggestions, type: 'analysis' }]);
         setCurrentStep('ready');
-        setActiveTab('insights');
-        addToHistory(file.name, file.data, result.suggestions);
+        setActiveTab('overview');
       }
     } catch (error) {
       console.error('Analysis error:', error);
-      setMessages([{
-        role: 'assistant',
-        content: '分析过程中出现错误，请稍后重试。',
-        type: 'text'
-      }]);
+      setMessages([{ role: 'assistant', content: '分析过程中出现错误，请稍后重试。', type: 'text' }]);
       setCurrentStep('upload');
     } finally {
       setIsLoading(false);
     }
   };
 
-  // 智能查询
-  const handleSmartQuery = async (query: string, mode: 'general' | 'prediction') => {
+  const handleSmartQuery = async (query: string) => {
     if (files.length === 0) return;
-
     setIsLoading(true);
-    
-    setMessages(prev => [...prev, {
-      role: 'user',
-      content: query,
-      type: 'text'
-    }]);
-
+    setMessages(prev => [...prev, { role: 'user', content: query, type: 'text' }]);
     try {
       const response = await fetch('/api/chat', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          messages: [{ role: 'user', content: query }],
-          data: {
-            fileName: files[0].name,
-            headers: files[0].data[0],
-            rowCount: files[0].data.length - 1,
-            sampleData: files[0].data.slice(1, 5)
-          },
-          model: selectedModel,
-          query
-        })
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ messages: [{ role: 'user', content: query }], data: { files: files.map(f => ({ fileName: f.name, headers: f.headers, rowCount: f.rowCount, sampleData: f.data.slice(1, 5), type: f.tableInfo.type })), linkResult, analysisFramework }, model: selectedModel, query })
       });
-
       const result = await response.json();
-      
       if (result.success) {
-        setMessages(prev => [...prev, {
-          role: 'assistant',
-          content: result.response,
-          type: 'analysis'
-        }]);
+        setMessages(prev => [...prev, { role: 'assistant', content: result.response, type: 'analysis' }]);
         setAiReport(result.response);
       }
     } catch (error) {
@@ -229,463 +268,184 @@ export default function DataAnalystPage() {
     }
   };
 
-  // 从历史记录加载
-  const handleSelectHistory = (item: HistoryItem) => {
-    const newFile: UploadedFile = {
-      name: item.fileName,
-      data: item.fileData,
-      size: 0
-    };
-    setFiles([newFile]);
-    setAiReport(item.report);
-    setMessages([{
-      role: 'assistant',
-      content: item.report,
-      type: 'analysis'
-    }]);
-    setCurrentStep('ready');
-    setActiveTab('insights');
-  };
+  const handleSelectHistory = (item: HistoryItem) => { setCurrentStep('upload'); };
+  const handleClear = () => { setFiles([]); setMessages([]); setAiReport(''); setLinkResult(null); setAnalysisFramework(null); setCurrentStep('upload'); setActiveTab('overview'); };
 
-  // 清除当前分析
-  const handleClear = () => {
-    setFiles([]);
-    setMessages([]);
-    setAiReport('');
-    setCurrentStep('upload');
-    setActiveTab('insights');
-  };
-
-  // 导出报告
   const handleExport = () => {
-    const reportContent = `
-# 数据分析报告
-
-文件：${files[0]?.name}
-生成时间：${new Date().toLocaleString('zh-CN')}
-
-${aiReport}
-
----
-对话记录：
-${messages.map(m => `${m.role === 'user' ? '用户' : 'AI'}: ${m.content}`).join('\n\n')}
-    `;
-    
+    const reportContent = ['# 数据分析报告', '', `生成时间：${new Date().toLocaleString('zh-CN')}`, `分析文件：${files.map(f => f.name).join(', ')}`, '', '## 表格识别结果', ...files.map(f => `- ${f.name}: ${getTableTypeLabel(f.tableInfo.type)} (置信度: ${Math.round(f.tableInfo.confidence * 100)}%)`), '', '## 数据关联分析', ...(linkResult?.joinGraph.edges.map(e => { const fromFile = files.find(f => f.id === e.from); const toFile = files.find(f => f.id === e.to); return `- ${fromFile?.name} ↔ ${toFile?.name}: 通过 ${e.joinFields.join(', ')} 关联，匹配率 ${(e.matchRate * 100).toFixed(1)}%`; }) || ['未检测到关联关系']), '', '## AI 分析报告', aiReport, '', '---', '对话记录：', ...messages.map(m => `${m.role === 'user' ? '用户' : 'AI'}: ${m.content}`)].join('\n');
     const blob = new Blob([reportContent], { type: 'text/markdown' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `分析报告_${files[0]?.name.replace(/\.[^/.]+$/, '')}_${new Date().toISOString().split('T')[0]}.md`;
+    a.download = `分析报告_${new Date().toISOString().split('T')[0]}.md`;
     a.click();
     URL.revokeObjectURL(url);
   };
 
-  // 计算关键指标（示例）
   const getMetrics = () => {
-    if (!files[0]?.data) return [];
-    
-    const headers = files[0].data[0] as string[];
-    const rows = files[0].data.slice(1) as any[][];
-    
-    // 根据表头智能识别指标
     const metrics = [];
-    
-    // 会员数
-    const memberCol = headers.findIndex(h => h.includes('会员') || h.includes('姓名'));
-    if (memberCol >= 0) {
-      const uniqueMembers = new Set(rows.map(r => r[memberCol])).size;
-      metrics.push({
-        title: '会员总数',
-        value: uniqueMembers.toString(),
-        icon: Users,
-        color: 'bg-blue-500'
-      });
-    }
-    
-    // 收入
-    const revenueCol = headers.findIndex(h => h.includes('金额') || h.includes('收入') || h.includes('价格'));
-    if (revenueCol >= 0) {
-      const totalRevenue = rows.reduce((sum, r) => sum + (Number(r[revenueCol]) || 0), 0);
-      metrics.push({
-        title: '总收入',
-        value: `¥${totalRevenue.toLocaleString()}`,
-        icon: Target,
-        color: 'bg-green-500'
-      });
-    }
-    
-    // 数据行数
-    metrics.push({
-      title: '数据记录',
-      value: rows.length.toString(),
-      icon: BarChart3,
-      color: 'bg-purple-500'
-    });
-    
+    metrics.push({ title: '上传文件', value: files.length.toString(), icon: FileSpreadsheet, color: 'bg-blue-500' });
+    const totalRows = files.reduce((sum, f) => sum + f.rowCount, 0);
+    metrics.push({ title: '数据记录', value: totalRows.toLocaleString(), icon: BarChart3, color: 'bg-purple-500' });
+    const uniqueTypes = new Set(files.map(f => f.tableInfo.type).filter(t => t !== 'unknown')).size;
+    metrics.push({ title: '表格类型', value: uniqueTypes.toString(), icon: Table2, color: 'bg-green-500' });
+    const linkCount = linkResult?.joinGraph.edges.length || 0;
+    metrics.push({ title: '关联关系', value: linkCount.toString(), icon: Link2, color: 'bg-orange-500' });
     return metrics;
   };
 
-  // 步骤指示器
   const StepIndicator = () => (
     <div className="flex items-center justify-center gap-2 mb-8">
-      {[
-        { key: 'upload', label: '上传数据', icon: Upload },
-        { key: 'analyzing', label: 'AI分析', icon: Brain },
-        { key: 'ready', label: '查看结果', icon: LayoutDashboard },
-      ].map((step, index) => {
+      {[{ key: 'upload', label: '上传数据', icon: Upload }, { key: 'analyzing', label: '智能分析', icon: Brain }, { key: 'ready', label: '查看结果', icon: LayoutDashboard }].map((step, index) => {
         const isActive = currentStep === step.key;
-        const isCompleted = 
-          (step.key === 'upload' && currentStep !== 'upload') ||
-          (step.key === 'analyzing' && currentStep === 'ready');
-        
+        const isCompleted = (step.key === 'upload' && currentStep !== 'upload') || (step.key === 'analyzing' && currentStep === 'ready');
         return (
           <div key={step.key} className="flex items-center">
-            <div className={`flex items-center gap-2 px-4 py-2 rounded-full transition-all ${
-              isActive ? 'bg-blue-600 text-white' : 
-              isCompleted ? 'bg-green-100 text-green-700' : 
-              'bg-gray-100 text-gray-500'
-            }`}>
-              <step.icon className="w-4 h-4" />
-              <span className="text-sm font-medium">{step.label}</span>
+            <div className={`flex items-center gap-2 px-4 py-2 rounded-full transition-all ${isActive ? 'bg-blue-600 text-white' : isCompleted ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'}`}>
+              <step.icon className="w-4 h-4" /><span className="text-sm font-medium">{step.label}</span>
             </div>
-            {index < 2 && (
-              <ChevronRight className="w-4 h-4 text-gray-300 mx-2" />
-            )}
+            {index < 2 && <ChevronRight className="w-4 h-4 text-gray-300 mx-2" />}
           </div>
         );
       })}
     </div>
   );
 
-  // 上传区域
   const UploadArea = () => (
-    <motion.div
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      className="max-w-2xl mx-auto"
-    >
-      <Card className="border-2 border-dashed border-gray-300 hover:border-blue-400 transition-colors">
-        <CardContent className="p-12 text-center">
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept=".xlsx,.xls"
-            multiple
-            onChange={handleFileUpload}
-            className="hidden"
-          />
-          
-          <div className="w-20 h-20 bg-blue-50 rounded-full flex items-center justify-center mx-auto mb-6">
-            <Upload className="w-10 h-10 text-blue-600" />
-          </div>
-          
-          <h2 className="text-2xl font-bold text-gray-800 mb-2">
-            上传 Excel 文件开始分析
-          </h2>
-          <p className="text-gray-500 mb-6">
-            支持 .xlsx 和 .xls 格式，文件大小建议不超过 10MB
-          </p>
-          
-          <Button 
-            size="lg"
-            onClick={() => fileInputRef.current?.click()}
-            className="bg-blue-600 hover:bg-blue-700"
-          >
-            <FileSpreadsheet className="w-5 h-5 mr-2" />
-            选择文件
-          </Button>
-
-          {/* 历史记录入口 */}
-          <AnalysisHistory 
-            onSelectHistory={handleSelectHistory}
-            currentFileName={files[0]?.name}
-          />
-        </CardContent>
-      </Card>
-
-      {/* 功能介绍 */}
-      <div className="grid grid-cols-3 gap-4 mt-8">
-        {[
-          { icon: Users, title: '会员分析', desc: '增长趋势、留存率、活跃度' },
-          { icon: Target, title: '教练管理', desc: '业绩排名、产能评估' },
-          { icon: TrendingUp, title: '预测分析', desc: '收入预测、流失预警' },
-        ].map((feature) => (
+    <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="max-w-3xl mx-auto">
+      <MultiFileUpload onFilesUploaded={handleFilesUploaded} maxFiles={10} maxFileSize={50} />
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-8">
+        {[{ icon: Upload, title: '多文件上传', desc: '支持同时上传多个Excel/CSV' }, { icon: Brain, title: '智能识别', desc: '自动识别表格类型' }, { icon: Link2, title: '自动关联', desc: '基于共同字段关联多表' }, { icon: Lightbulb, title: '智能推荐', desc: '推荐分析维度和框架' }].map((feature) => (
           <div key={feature.title} className="text-center p-4">
-            <div className="w-12 h-12 bg-gray-100 rounded-xl flex items-center justify-center mx-auto mb-3">
-              <feature.icon className="w-6 h-6 text-gray-600" />
-            </div>
+            <div className="w-12 h-12 bg-gray-100 rounded-xl flex items-center justify-center mx-auto mb-3"><feature.icon className="w-6 h-6 text-gray-600" /></div>
             <h3 className="font-medium text-gray-800 mb-1">{feature.title}</h3>
             <p className="text-sm text-gray-500">{feature.desc}</p>
           </div>
         ))}
       </div>
+      <div className="mt-8"><AnalysisHistory onSelectHistory={handleSelectHistory} currentFileName={files[0]?.name} /></div>
     </motion.div>
   );
 
-  // 分析中状态
   const AnalyzingState = () => (
-    <motion.div
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      className="flex flex-col items-center justify-center py-20"
-    >
-      <LoadingAnimation 
-        message="AI 正在分析您的数据..." 
-        type="analysis"
-      />
+    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex flex-col items-center justify-center py-20">
+      <LoadingAnimation message="AI 正在分析您的数据..." type="analysis" />
       {files.length > 0 && (
-        <div className="mt-8 text-center">
-          <p className="text-gray-600 font-medium">{files[0].name}</p>
-          <p className="text-sm text-gray-400 mt-1">
-            {(files[0].size / 1024).toFixed(1)} KB · {files[0].data.length - 1} 行数据
-          </p>
+        <div className="mt-8 max-w-2xl w-full">
+          <div className="space-y-3">
+            {files.map((file) => (
+              <div key={file.id} className="flex items-center gap-3 p-3 bg-white rounded-lg border">
+                <CheckCircle2 className="w-5 h-5 text-green-600" />
+                <div className="flex-1">
+                  <div className="flex items-center gap-2"><span className="font-medium text-sm">{file.name}</span><TableTypeBadge type={file.tableInfo.type} confidence={file.tableInfo.confidence} /></div>
+                  <p className="text-xs text-gray-500">{file.rowCount.toLocaleString()} 行数据 · {file.headers.length} 个字段</p>
+                </div>
+              </div>
+            ))}
+          </div>
+          {linkResult && linkResult.joinGraph.edges.length > 0 && (
+            <div className="mt-4 p-4 bg-green-50 rounded-lg border border-green-100">
+              <p className="text-sm text-green-800 flex items-center gap-2"><Link2 className="w-4 h-4" />检测到 {linkResult.joinGraph.edges.length} 个关联关系</p>
+            </div>
+          )}
         </div>
       )}
     </motion.div>
   );
 
-  // 结果页面 - 标签页内容
-  const TabContent = () => {
-    switch (activeTab) {
-      case 'insights':
-        return (
-          <motion.div
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="space-y-6"
-          >
-            {/* AI 分析报告 */}
-            {aiReport && (
-              <AIReportView 
-                report={aiReport}
-                data={files[0]?.data || []}
-                fileName={files[0]?.name}
-                onClear={() => setAiReport('')}
-              />
-            )}
-          </motion.div>
-        );
-      
-      case 'charts':
-        return (
-          <motion.div
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="space-y-6"
-          >
-            {files.map((file, index) => (
-              <DataVisualization 
-                key={index}
-                data={file.data} 
-                fileName={file.name}
-              />
-            ))}
-          </motion.div>
-        );
-      
-      case 'explore':
-        return (
-          <motion.div
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="space-y-6"
-          >
-            {/* 智能查询 */}
-            <SmartQuery 
-              onQuery={handleSmartQuery}
-              isLoading={isLoading}
-            />
-
-            {/* 对话历史 */}
-            {messages.length > 0 && (
-              <Card className="bg-gray-50 border-0">
-                <CardContent className="p-4">
-                  <h3 className="font-medium text-gray-700 mb-4 flex items-center gap-2">
-                    <MessageCircle className="w-4 h-4" />
-                    对话记录 ({messages.length})
-                  </h3>
-                  <div className="space-y-3 max-h-96 overflow-y-auto">
-                    {messages.map((msg, idx) => (
-                      <div 
-                        key={idx} 
-                        className={`p-3 rounded-lg ${
-                          msg.role === 'user' ? 'bg-blue-100 ml-8' : 'bg-white mr-8 border border-gray-200'
-                        }`}
-                      >
-                        <div className="flex items-center gap-2 mb-1">
-                          <span className={`text-xs font-medium ${
-                            msg.role === 'user' ? 'text-blue-700' : 'text-gray-500'
-                          }`}>
-                            {msg.role === 'user' ? '你' : 'AI 助手'}
-                          </span>
-                          {msg.type === 'analysis' && (
-                            <Badge variant="secondary" className="text-xs">
-                              <Zap className="w-3 h-3 mr-1" />
-                              分析
-                            </Badge>
-                          )}
-                        </div>
-                        <div className="text-sm whitespace-pre-wrap">{msg.content}</div>
-                      </div>
-                    ))}
+  const OverviewTab = () => (
+    <div className="space-y-6">
+      <Card>
+        <CardHeader><CardTitle className="text-lg flex items-center gap-2"><Brain className="w-5 h-5 text-blue-600" />智能识别结果</CardTitle></CardHeader>
+        <CardContent>
+          <div className="space-y-4">
+            {files.map((file) => (
+              <div key={file.id} className="flex items-start gap-4 p-4 bg-gray-50 rounded-lg">
+                <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center flex-shrink-0"><Table2 className="w-6 h-6 text-blue-600" /></div>
+                <div className="flex-1">
+                  <div className="flex items-center gap-3 mb-2"><h4 className="font-semibold">{file.name}</h4><TableTypeBadge type={file.tableInfo.type} confidence={file.tableInfo.confidence} /></div>
+                  <p className="text-sm text-gray-600 mb-2">{getTableTypeDescription(file.tableInfo.type)}</p>
+                  <div className="flex flex-wrap gap-2">
+                    <Badge variant="outline" className="text-xs">{file.rowCount.toLocaleString()} 行</Badge>
+                    <Badge variant="outline" className="text-xs">{file.headers.length} 列</Badge>
+                    {file.tableInfo.matchedFields.slice(0, 5).map((field, i) => <Badge key={i} variant="secondary" className="text-xs">{field}</Badge>)}
+                    {file.tableInfo.matchedFields.length > 5 && <Badge variant="secondary" className="text-xs">+{file.tableInfo.matchedFields.length - 5}</Badge>}
                   </div>
-                </CardContent>
-              </Card>
-            )}
-          </motion.div>
-        );
-    }
-  };
+                </div>
+              </div>
+            ))}
+          </div>
+        </CardContent>
+      </Card>
+      {files.length > 1 && linkResult && <Card><CardHeader><CardTitle className="text-lg flex items-center gap-2"><Link2 className="w-5 h-5 text-green-600" />数据关联分析</CardTitle></CardHeader><CardContent><LinkGraphView joinGraph={linkResult.joinGraph} files={files} /></CardContent></Card>}
+      {analysisFramework && analysisFramework.frameworks.length > 0 && <Card><CardHeader><CardTitle className="text-lg flex items-center gap-2"><Lightbulb className="w-5 h-5 text-yellow-600" />推荐分析框架</CardTitle></CardHeader><CardContent><div className="grid gap-4">{analysisFramework.frameworks.map((framework) => <FrameworkCard key={framework.id} framework={framework} />)}</div></CardContent></Card>}
+      {analysisFramework && analysisFramework.combinedInsights.length > 0 && <Card><CardHeader><CardTitle className="text-lg flex items-center gap-2"><Zap className="w-5 h-5 text-purple-600" />组合洞察建议</CardTitle></CardHeader><CardContent><div className="grid gap-4">{analysisFramework.combinedInsights.map((insight, idx) => <CombinedInsightCard key={idx} insight={insight} />)}</div></CardContent></Card>}
+    </div>
+  );
 
-  // 结果展示
   const ResultsView = () => {
     const metrics = getMetrics();
-    
     return (
-      <motion.div
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        className="space-y-6"
-      >
-        {/* 顶部工具栏 */}
+      <div className="space-y-6">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-4 rounded-xl border border-gray-200">
           <div className="flex items-center gap-4">
-            <div className="flex items-center gap-2">
-              <FileSpreadsheet className="w-5 h-5 text-green-600" />
-              <span className="font-medium">{files[0]?.name}</span>
-            </div>
-            
-            {/* 模型选择 */}
+            <div className="flex items-center gap-2"><FileSpreadsheet className="w-5 h-5 text-green-600" /><span className="font-medium">{files.length} 个文件</span></div>
             <div className="relative">
-              <button
-                onClick={() => setShowModelSelect(!showModelSelect)}
-                className="flex items-center gap-2 px-3 py-1.5 bg-gray-100 rounded-lg text-sm hover:bg-gray-200 transition-colors"
-              >
-                <Sparkles className="w-4 h-4 text-blue-600" />
-                {selectedModel === 'deepseek' ? 'DeepSeek' : 'Kimi'}
-                <ChevronRight className={`w-3 h-3 transition-transform ${showModelSelect ? 'rotate-90' : ''}`} />
+              <button onClick={() => setShowModelSelect(!showModelSelect)} className="flex items-center gap-2 px-3 py-1.5 bg-gray-100 rounded-lg text-sm hover:bg-gray-200 transition-colors">
+                <Sparkles className="w-4 h-4 text-blue-600" />{selectedModel === 'deepseek' ? 'DeepSeek' : 'Kimi'}<ChevronRight className={`w-3 h-3 transition-transform ${showModelSelect ? 'rotate-90' : ''}`} />
               </button>
-              
               {showModelSelect && (
                 <div className="absolute top-full left-0 mt-1 bg-white border border-gray-200 rounded-lg shadow-lg z-10 min-w-[120px]">
-                  {['deepseek', 'kimi'].map((model) => (
-                    <button
-                      key={model}
-                      onClick={() => { setSelectedModel(model as any); setShowModelSelect(false); }}
-                      className={`w-full px-3 py-2 text-left text-sm hover:bg-gray-50 ${selectedModel === model ? 'bg-blue-50 text-blue-600' : ''}`}
-                    >
-                      {model === 'deepseek' ? 'DeepSeek' : 'Kimi'}
-                    </button>
-                  ))}
+                  {['deepseek', 'kimi'].map((model) => <button key={model} onClick={() => { setSelectedModel(model as any); setShowModelSelect(false); }} className={`w-full px-3 py-2 text-left text-sm hover:bg-gray-50 ${selectedModel === model ? 'bg-blue-50 text-blue-600' : ''}`}>{model === 'deepseek' ? 'DeepSeek' : 'Kimi'}</button>)}
                 </div>
               )}
             </div>
           </div>
-          
           <div className="flex items-center gap-2">
-            <Button variant="outline" size="sm" onClick={handleExport}>
-              <Download className="w-4 h-4 mr-1" />
-              导出报告
-            </Button>
-            <Button variant="outline" size="sm" onClick={handleClear}>
-              <X className="w-4 h-4 mr-1" />
-              新分析
-            </Button>
+            <Button variant="outline" size="sm" onClick={handleExport}><Download className="w-4 h-4 mr-1" />导出报告</Button>
+            <Button variant="outline" size="sm" onClick={handleClear}><X className="w-4 h-4 mr-1" />新分析</Button>
           </div>
         </div>
-
-        {/* 关键指标卡片 */}
-        {metrics.length > 0 && (
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            {metrics.map((metric, idx) => (
-              <MetricCard key={idx} {...metric} />
-            ))}
-          </div>
-        )}
-
-        {/* 标签页导航 */}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">{metrics.map((metric, idx) => <MetricCard key={idx} {...metric} />)}</div>
         <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-          {/* 标签页头部 */}
-          <div className="flex border-b border-gray-200">
-            {[
-              { key: 'insights', label: '洞察', icon: LayoutDashboard, desc: 'AI分析摘要' },
-              { key: 'charts', label: '图表', icon: PieChart, desc: '数据可视化' },
-              { key: 'explore', label: '探索', icon: MessageSquare, desc: '智能问答' },
-            ].map((tab) => (
-              <button
-                key={tab.key}
-                onClick={() => setActiveTab(tab.key as ResultTab)}
-                className={`flex-1 flex items-center justify-center gap-2 px-4 py-4 transition-all ${
-                  activeTab === tab.key 
-                    ? 'bg-blue-50 text-blue-600 border-b-2 border-blue-600' 
-                    : 'text-gray-500 hover:bg-gray-50'
-                }`}
-              >
-                <tab.icon className="w-5 h-5" />
-                <div className="text-left">
-                  <div className="font-medium">{tab.label}</div>
-                  <div className="text-xs opacity-70 hidden sm:block">{tab.desc}</div>
+          <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as ResultTab)}>
+            <TabsList className="w-full justify-start rounded-none border-b bg-gray-50/50 p-0 h-auto">
+              {[{ key: 'overview', label: '概览', icon: LayoutDashboard }, { key: 'insights', label: '洞察', icon: Brain }, { key: 'charts', label: '图表', icon: PieChart }, { key: 'explore', label: '探索', icon: MessageSquare }].map((tab) => <TabsTrigger key={tab.key} value={tab.key} className="flex-1 flex items-center justify-center gap-2 py-4 rounded-none data-[state=active]:bg-blue-50 data-[state=active]:text-blue-600 data-[state=active]:border-b-2 data-[state=active]:border-blue-600"><tab.icon className="w-4 h-4" /><span className="font-medium">{tab.label}</span></TabsTrigger>)}
+            </TabsList>
+            <div className="p-6">
+              <TabsContent value="overview" className="mt-0"><OverviewTab /></TabsContent>
+              <TabsContent value="insights" className="mt-0">{aiReport && <AIReportView report={aiReport} data={files[0]?.data || []} fileName={files[0]?.name} onClear={() => setAiReport('')} />}</TabsContent>
+              <TabsContent value="charts" className="mt-0"><div className="space-y-6">{files.map((file, index) => <DataVisualization key={index} data={file.data} fileName={file.name} />)}</div></TabsContent>
+              <TabsContent value="explore" className="mt-0">
+                <div className="space-y-6">
+                  <SmartQuery onQuery={handleSmartQuery} isLoading={isLoading} />
+                  {messages.length > 0 && <Card className="bg-gray-50 border-0"><CardContent className="p-4"><h3 className="font-medium text-gray-700 mb-4 flex items-center gap-2"><MessageSquare className="w-4 h-4" />对话记录 ({messages.length})</h3><div className="space-y-3 max-h-96 overflow-y-auto">{messages.map((msg, idx) => <div key={idx} className={`p-3 rounded-lg ${msg.role === 'user' ? 'bg-blue-100 ml-8' : 'bg-white mr-8 border border-gray-200'}`}><div className="flex items-center gap-2 mb-1"><span className={`text-xs font-medium ${msg.role === 'user' ? 'text-blue-700' : 'text-gray-500'}`}>{msg.role === 'user' ? '你' : 'AI 助手'}</span>{msg.type === 'analysis' && <Badge variant="secondary" className="text-xs"><Zap className="w-3 h-3 mr-1" />分析</Badge>}</div><div className="text-sm whitespace-pre-wrap">{msg.content}</div></div>)}</div></CardContent></Card>}
                 </div>
-              </button>
-            ))}
-          </div>
-
-          {/* 标签页内容 */}
-          <div className="p-6">
-            <TabContent />
-          </div>
+              </TabsContent>
+            </div>
+          </Tabs>
         </div>
-      </motion.div>
+      </div>
     );
   };
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-blue-50/30">
-      {/* 顶部导航 */}
       <header className="bg-white border-b border-gray-200 sticky top-0 z-50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-gradient-to-br from-blue-600 to-purple-600 rounded-xl flex items-center justify-center">
-              <BarChart3 className="w-6 h-6 text-white" />
-            </div>
-            <div>
-              <h1 className="font-bold text-xl text-gray-900">AI 数据分析助手</h1>
-              <p className="text-xs text-gray-500">健身房经营管理智能平台</p>
-            </div>
+            <div className="w-10 h-10 bg-gradient-to-br from-blue-600 to-purple-600 rounded-xl flex items-center justify-center"><BarChart3 className="w-6 h-6 text-white" /></div>
+            <div><h1 className="font-bold text-xl text-gray-900">AI 数据分析助手</h1><p className="text-xs text-gray-500">健身房经营管理智能平台</p></div>
           </div>
-          
-          {currentStep === 'ready' && (
-            <Button variant="outline" size="sm" onClick={handleClear}>
-              分析新文件
-            </Button>
-          )}
+          {currentStep === 'ready' && <Button variant="outline" size="sm" onClick={handleClear}>分析新文件</Button>}
         </div>
       </header>
-
-      {/* 主内容区 */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* 步骤指示器 */}
         {currentStep !== 'upload' && <StepIndicator />}
-        
-        {/* 内容切换 */}
         <AnimatePresence mode="wait">
-          {currentStep === 'upload' && (
-            <motion.div key="upload" exit={{ opacity: 0 }}>
-              <UploadArea />
-            </motion.div>
-          )}
-          
-          {currentStep === 'analyzing' && (
-            <motion.div key="analyzing" exit={{ opacity: 0 }}>
-              <AnalyzingState />
-            </motion.div>
-          )}
-          
-          {currentStep === 'ready' && (
-            <motion.div key="results" exit={{ opacity: 0 }}>
-              <ResultsView />
-            </motion.div>
-          )}
+          {currentStep === 'upload' && <motion.div key="upload" exit={{ opacity: 0 }}><UploadArea /></motion.div>}
+          {currentStep === 'analyzing' && <motion.div key="analyzing" exit={{ opacity: 0 }}><AnalyzingState /></motion.div>}
+          {currentStep === 'ready' && <motion.div key="results" exit={{ opacity: 0 }}><ResultsView /></motion.div>}
         </AnimatePresence>
       </main>
     </div>
