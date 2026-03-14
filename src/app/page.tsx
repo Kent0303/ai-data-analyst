@@ -3,6 +3,7 @@
 import { DashboardProvider, ThreeColumnLayout } from '@/components/layout';
 import { FilterBar, KPICards, ChartContainer, AIFooter } from '@/components/dashboard';
 import MultiFileUpload, { UploadedFile } from '@/components/upload/MultiFileUpload';
+import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { useDashboard } from '@/components/layout/DashboardContext';
 import { useState, useCallback, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -199,10 +200,12 @@ function PageContent() {
 // 主页面
 export default function DataAnalystPage() {
   return (
-    <DashboardProvider>
-      <ThreeColumnLayout>
-        <PageContent />
-      </ThreeColumnLayout>
-    </DashboardProvider>
+    <ErrorBoundary>
+      <DashboardProvider>
+        <ThreeColumnLayout>
+          <PageContent />
+        </ThreeColumnLayout>
+      </DashboardProvider>
+    </ErrorBoundary>
   );
 }
