@@ -91,7 +91,7 @@ interface DashboardContextType extends DashboardState {
   clearDashboard: () => void;
 }
 
-const defaultChartConfig: ChartConfig = {
+const getDefaultChartConfig = (): ChartConfig => ({
   type: 'bar',
   title: '数据分析图表',
   xAxis: '',
@@ -101,7 +101,7 @@ const defaultChartConfig: ChartConfig = {
   showTooltip: true,
   stacked: false,
   filters: [],
-};
+});
 
 const getDefaultKPIConfigs = (): KPIConfig[] => [
   { id: 'kpi-1', title: '总收入', field: 'amount', aggregation: 'sum', format: 'currency', prefix: '¥', color: 'bg-blue-500' },
@@ -117,7 +117,7 @@ export function DashboardProvider({ children }: { children: ReactNode }) {
     dataSources: [],
     selectedDataSource: null,
     kpiConfigs: getDefaultKPIConfigs(),
-    chartConfig: defaultChartConfig,
+    chartConfig: getDefaultChartConfig(),
     globalFilters: [],
     aiMessages: [],
     isAILoading: false,
@@ -193,7 +193,7 @@ export function DashboardProvider({ children }: { children: ReactNode }) {
       dataSources: [],
       selectedDataSource: null,
       kpiConfigs: getDefaultKPIConfigs(),
-      chartConfig: defaultChartConfig,
+      chartConfig: getDefaultChartConfig(),
       globalFilters: [],
       aiMessages: [],
       isAILoading: false,

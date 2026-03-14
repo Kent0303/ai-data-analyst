@@ -44,15 +44,18 @@ function PageContent() {
 
   // 同步 files 到全局状态
   useEffect(() => {
-    const sources = files.map(file => ({
-      id: file.id,
-      name: file.name,
-      type: file.tableInfo.type,
-      rowCount: file.rowCount,
-      headers: file.headers,
-    }));
-    setDataSources(sources);
-  }, [files, setDataSources]);
+    if (files.length > 0) {
+      const sources = files.map(file => ({
+        id: file.id,
+        name: file.name,
+        type: file.tableInfo.type,
+        rowCount: file.rowCount,
+        headers: file.headers,
+      }));
+      setDataSources(sources);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [files]);
 
   const handleFilesUploaded = useCallback((uploadedFiles: UploadedFile[]) => {
     setFiles(uploadedFiles);
