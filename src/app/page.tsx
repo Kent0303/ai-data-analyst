@@ -29,7 +29,15 @@ import { getAlertEngine, AlertDataSource } from '@/lib/alerts';
 import { Member, EntryRecord, Booking, Consumption } from '@/lib/tableRecognizer';
 
 // 分析模板内容组件
-function TemplateAnalysisView({ templateId, files }: { templateId: string; files: UploadedFile[] }) {
+function TemplateAnalysisView({ 
+  templateId, 
+  files, 
+  selectedModel 
+}: { 
+  templateId: string; 
+  files: UploadedFile[];
+  selectedModel: 'deepseek' | 'kimi';
+}) {
   const templateNames: Record<string, string> = {
     'member-lifecycle': '会员生命周期分析',
     'revenue-dashboard': '营收健康度仪表盘',
@@ -44,6 +52,50 @@ function TemplateAnalysisView({ templateId, files }: { templateId: string; files
     'venue-utilization': '分析场地使用效率，识别高峰低谷时段，优化资源配置',
   };
 
+  const [analysisResult, setAnalysisResult] = useState<string>('');
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [error, setError] = useState<string>('');
+
+  // 执行 AI 分析
+  useEffect(() => {
+    const performAnalysis = async () => {
+      if (files.length === 0) return;
+      
+      setIsAnalyzing(true);
+      setError('');
+      
+      try {
+        const response = await fetch('/api/analyze', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            files: files.map(f => ({ 
+              name: f.name, 
+              data: f.data.slice(0, 100), // 只发送前100行数据避免过大
+              headers: f.headers,
+              type: f.tableInfo.type 
+            })),
+            templateId,
+            model: selectedModel,
+          })
+        });
+        
+        const result = await response.json();
+        if (result.success) {
+          setAnalysisResult(result.suggestions || result.analysis || '分析完成，但未返回结果');
+        } else {
+          setError(result.error || '分析失败');
+        }
+      } catch (err) {
+        setError('网络错误，请稍后重试');
+      } finally {
+        setIsAnalyzing(false);
+      }
+    };
+    
+    performAnalysis();
+  }, [templateId, files, selectedModel]);
+
   return (
     <div className="p-6 space-y-6">
       <div className="flex items-center justify-between">
@@ -54,22 +106,55 @@ function TemplateAnalysisView({ templateId, files }: { templateId: string; files
         <Badge variant="outline" className="text-sm">{files.length} 个数据源</Badge>
       </div>
       
-      <Card>
-        <CardContent className="p-8 text-center">
-          <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
-            <Sparkles className="w-8 h-8 text-blue-600" />
-          </div>
-          <h3 className="text-lg font-medium text-gray-900 mb-2">AI 正在生成分析报告...</h3>
-          <p className="text-gray-500 max-w-md mx-auto">
-            基于您上传的 {files.length} 个数据文件，正在使用 {templateNames[templateId]} 模板进行深度分析
-          </p>
-          <div className="mt-6 flex justify-center gap-2">
-            {files.map((f) => (
-              <Badge key={f.id} variant="secondary">{f.name}</Badge>
-            ))}
-          </div>
-        </CardContent>
-      </Card>
+      {isAnalyzing ? (
+        <Card>
+          <CardContent className="p-8 text-center">
+            <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
+              <Sparkles className="w-8 h-8 text-blue-600 animate-pulse" />
+            </div>
+            <h3 className="text-lg font-medium text-gray-900 mb-2">AI 正在生成分析报告...</h3>
+            <p className="text-gray-500 max-w-md mx-auto">
+              基于您上传的 {files.length} 个数据文件，正在使用 {templateNames[templateId]} 模板进行深度分析
+            </p>
+            <div className="mt-6 flex justify-center gap-2">
+              {files.map((f) => (
+                <Badge key={f.id} variant="secondary">{f.name}</Badge>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      ) : error ? (
+        <Card className="border-red-200">
+          <CardContent className="p-8 text-center">
+            <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
+              <AlertCircle className="w-8 h-8 text-red-600" />
+            </div>
+            <h3 className="text-lg font-medium text-gray-900 mb-2">分析出错</h3>
+            <p className="text-red-500 max-w-md mx-auto">{error}</p>
+          </CardContent>
+        </Card>
+      ) : analysisResult ? (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Sparkles className="w-5 h-5 text-blue-600" />
+              AI 分析报告
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="prose prose-sm max-w-none">
+              <div dangerouslySetInnerHTML={{ 
+                __html: analysisResult
+                  .replace(/\n/g, '<br/>')
+                  .replace(/#{1,6}\s+(.+)/g, '<h3 class="text-lg font-bold mt-4 mb-2">$1</h3>')
+                  .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+                  .replace(/\*(.+?)\*/g, '<em>$1</em>')
+                  .replace(/-\s+(.+)/g, '<li class="ml-4">$1</li>')
+              }} />
+            </div>
+          </CardContent>
+        </Card>
+      ) : null}
 
       {/* 显示数据源概览 */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -249,7 +334,7 @@ function PageContent({ showAlertPanel, setShowAlertPanel }: { showAlertPanel: bo
   
   // 如果有选中的分析模板，显示模板分析视图
   if (selectedTemplate) {
-    return <TemplateAnalysisView templateId={selectedTemplate} files={files} />;
+    return <TemplateAnalysisView templateId={selectedTemplate} files={files} selectedModel={selectedModel} />;
   }
   
   // 如果显示预警面板
