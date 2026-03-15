@@ -183,8 +183,11 @@ export default function LeftSidebar({
                 <button
                   key={template.id}
                   onClick={() => {
-                    setSelectedTemplate(template.id === selectedTemplate ? null : template.id);
-                    onTemplateClick?.();
+                    const newTemplate = template.id === selectedTemplate ? null : template.id;
+                    setSelectedTemplate(newTemplate);
+                    if (newTemplate) {
+                      onTemplateClick?.();
+                    }
                   }}
                   className={`w-full flex items-center gap-2 p-2 rounded-lg text-left transition-colors ${
                     selectedTemplate === template.id 

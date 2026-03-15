@@ -28,9 +28,73 @@ import { generateAnalysisFramework, AnalysisFramework, CombinedInsight, Generate
 import { getAlertEngine, AlertDataSource } from '@/lib/alerts';
 import { Member, EntryRecord, Booking, Consumption } from '@/lib/tableRecognizer';
 
+// 分析模板内容组件
+function TemplateAnalysisView({ templateId, files }: { templateId: string; files: UploadedFile[] }) {
+  const templateNames: Record<string, string> = {
+    'member-lifecycle': '会员生命周期分析',
+    'revenue-dashboard': '营收健康度仪表盘',
+    'coach-performance': '教练绩效分析',
+    'venue-utilization': '场地利用率分析',
+  };
+
+  const templateDescriptions: Record<string, string> = {
+    'member-lifecycle': '分析会员从注册到流失的全生命周期价值，识别高价值会员和流失风险',
+    'revenue-dashboard': '全面展示营收状况，包括收入趋势、成本分析和盈利能力评估',
+    'coach-performance': '评估教练授课质量、会员满意度和私教转化率等关键指标',
+    'venue-utilization': '分析场地使用效率，识别高峰低谷时段，优化资源配置',
+  };
+
+  return (
+    <div className="p-6 space-y-6">
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-2xl font-bold text-gray-900">{templateNames[templateId] || '分析模板'}</h2>
+          <p className="text-gray-500 mt-1">{templateDescriptions[templateId] || '基于上传数据自动生成分析'}</p>
+        </div>
+        <Badge variant="outline" className="text-sm">{files.length} 个数据源</Badge>
+      </div>
+      
+      <Card>
+        <CardContent className="p-8 text-center">
+          <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
+            <Sparkles className="w-8 h-8 text-blue-600" />
+          </div>
+          <h3 className="text-lg font-medium text-gray-900 mb-2">AI 正在生成分析报告...</h3>
+          <p className="text-gray-500 max-w-md mx-auto">
+            基于您上传的 {files.length} 个数据文件，正在使用 {templateNames[templateId]} 模板进行深度分析
+          </p>
+          <div className="mt-6 flex justify-center gap-2">
+            {files.map((f) => (
+              <Badge key={f.id} variant="secondary">{f.name}</Badge>
+            ))}
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* 显示数据源概览 */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        {files.map((file) => (
+          <Card key={file.id}>
+            <CardContent className="p-4">
+              <div className="flex items-center gap-3">
+                <FileSpreadsheet className="w-8 h-8 text-green-600" />
+                <div className="flex-1 min-w-0">
+                  <p className="font-medium text-gray-900 truncate">{file.name}</p>
+                  <p className="text-sm text-gray-500">{file.rowCount.toLocaleString()} 行 · {file.headers.length} 列</p>
+                </div>
+                <Badge>{getTableTypeLabel(file.tableInfo.type)}</Badge>
+              </div>
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 // 页面内容组件
-function PageContent() {
-  const { setDataSources, setAlertCount, selectedModel, addAIMessage, setAILoading } = useDashboard();
+function PageContent({ showAlertPanel, setShowAlertPanel }: { showAlertPanel: boolean; setShowAlertPanel: (show: boolean) => void }) {
+  const { setDataSources, setAlertCount, selectedModel, addAIMessage, setAILoading, selectedTemplate, setSelectedTemplate } = useDashboard();
   
   const [files, setFiles] = useState<UploadedFile[]>([]);
   const [currentStep, setCurrentStep] = useState<'upload' | 'analyzing' | 'ready'>('upload');
@@ -182,6 +246,65 @@ function PageContent() {
   }
 
   // 结果展示 - 三栏布局内容
+  
+  // 如果有选中的分析模板，显示模板分析视图
+  if (selectedTemplate) {
+    return <TemplateAnalysisView templateId={selectedTemplate} files={files} />;
+  }
+  
+  // 如果显示预警面板
+  if (showAlertPanel) {
+    const memberFile = files.find(f => f.tableInfo.type === 'member_list');
+    const consumptionFile = files.find(f => f.tableInfo.type === 'consumption_record');
+    const entryFile = files.find(f => f.tableInfo.type === 'entry_record');
+    const bookingFile = files.find(f => f.tableInfo.type === 'private_class_booking' || f.tableInfo.type === 'group_class_booking');
+    
+    return (
+      <div className="p-6">
+        <div className="flex items-center justify-between mb-6">
+          <div>
+            <h2 className="text-2xl font-bold text-gray-900">智能预警中心</h2>
+            <p className="text-gray-500 mt-1">自动检测经营风险，及时预警</p>
+          </div>
+          <Button variant="outline" onClick={() => setShowAlertPanel(false)}>
+            返回概览
+          </Button>
+        </div>
+        <AlertPanel 
+          dataSource={files.length > 0 ? {
+            members: memberFile?.data?.map((row: any) => ({
+              id: row[0] || '', 
+              name: row[1] || '', 
+              phone: row[2], 
+              registerDate: row[3] || new Date().toISOString(), 
+              status: row[4]
+            })) || [],
+            consumptions: consumptionFile?.data?.map((row: any) => ({
+              id: row[0] || '', 
+              memberId: row[1] || '', 
+              amount: parseFloat(row[2]) || 0, 
+              date: row[3] || new Date().toISOString(), 
+              type: row[4] || 'other'
+            })) || [],
+            entries: entryFile?.data?.map((row: any) => ({
+              id: row[0] || '', 
+              memberId: row[1] || '', 
+              entryTime: row[2] || new Date().toISOString(), 
+              exitTime: row[3]
+            })) || [],
+            bookings: bookingFile?.data?.map((row: any) => ({
+              id: row[0] || '', 
+              memberId: row[1] || '', 
+              coachId: row[2], 
+              bookingTime: row[3] || new Date().toISOString(), 
+              type: bookingFile?.tableInfo.type === 'private_class_booking' ? 'private' : 'group'
+            })) || [],
+          } : undefined}
+        />
+      </div>
+    );
+  }
+  
   return (
     <>
       {/* 筛选栏 */}
@@ -203,13 +326,23 @@ function PageContent() {
 
 // 主页面
 export default function DataAnalystPage() {
+  const [showAlertPanel, setShowAlertPanel] = useState(false);
+  
   return (
     <ErrorBoundary>
       <DashboardProvider>
-        <ThreeColumnLayout>
-          <PageContent />
+        <ThreeColumnLayout 
+          onTemplateClick={() => setShowAlertPanel(false)}
+          onAlertClick={() => setShowAlertPanel(true)}
+        >
+          <PageContentWrapper showAlertPanel={showAlertPanel} setShowAlertPanel={setShowAlertPanel} />
         </ThreeColumnLayout>
       </DashboardProvider>
     </ErrorBoundary>
   );
+}
+
+// 包装组件以访问 DashboardContext
+function PageContentWrapper({ showAlertPanel, setShowAlertPanel }: { showAlertPanel: boolean; setShowAlertPanel: (show: boolean) => void }) {
+  return <PageContent showAlertPanel={showAlertPanel} setShowAlertPanel={setShowAlertPanel} />;
 }
