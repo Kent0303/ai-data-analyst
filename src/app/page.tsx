@@ -55,6 +55,15 @@ function TemplateAnalysisView({
   const [analysisResult, setAnalysisResult] = useState<string>('');
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [error, setError] = useState<string>('');
+  const [stats, setStats] = useState<any>(null);
+
+  // 计算统计数据
+  useEffect(() => {
+    if (files.length === 0) return;
+    
+    const calculatedStats = calculateStats(files, templateId);
+    setStats(calculatedStats);
+  }, [files, templateId]);
 
   // 执行 AI 分析
   useEffect(() => {
@@ -71,7 +80,7 @@ function TemplateAnalysisView({
           body: JSON.stringify({
             files: files.map(f => ({ 
               name: f.name, 
-              data: f.data.slice(0, 100), // 只发送前100行数据避免过大
+              data: f.data.slice(0, 100),
               headers: f.headers,
               type: f.tableInfo.type 
             })),
@@ -106,21 +115,22 @@ function TemplateAnalysisView({
         <Badge variant="outline" className="text-sm">{files.length} 个数据源</Badge>
       </div>
       
+      {/* 关键指标卡片 */}
+      {stats && <KPIGrid stats={stats} templateId={templateId} />}
+      
+      {/* 可视化图表 */}
+      {stats && <AnalysisCharts stats={stats} templateId={templateId} />}
+      
       {isAnalyzing ? (
         <Card>
           <CardContent className="p-8 text-center">
             <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
               <Sparkles className="w-8 h-8 text-blue-600 animate-pulse" />
             </div>
-            <h3 className="text-lg font-medium text-gray-900 mb-2">AI 正在生成分析报告...</h3>
+            <h3 className="text-lg font-medium text-gray-900 mb-2">AI 正在生成深度分析...</h3>
             <p className="text-gray-500 max-w-md mx-auto">
               基于您上传的 {files.length} 个数据文件，正在使用 {templateNames[templateId]} 模板进行深度分析
             </p>
-            <div className="mt-6 flex justify-center gap-2">
-              {files.map((f) => (
-                <Badge key={f.id} variant="secondary">{f.name}</Badge>
-              ))}
-            </div>
           </CardContent>
         </Card>
       ) : error ? (
@@ -138,42 +148,526 @@ function TemplateAnalysisView({
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Sparkles className="w-5 h-5 text-blue-600" />
-              AI 分析报告
+              AI 深度洞察
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="prose prose-sm max-w-none">
+            <div className="prose prose-sm max-w-none text-gray-700 leading-relaxed">
               <div dangerouslySetInnerHTML={{ 
-                __html: analysisResult
-                  .replace(/\n/g, '<br/>')
-                  .replace(/#{1,6}\s+(.+)/g, '<h3 class="text-lg font-bold mt-4 mb-2">$1</h3>')
-                  .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
-                  .replace(/\*(.+?)\*/g, '<em>$1</em>')
-                  .replace(/-\s+(.+)/g, '<li class="ml-4">$1</li>')
+                __html: formatAnalysisResult(analysisResult)
               }} />
             </div>
           </CardContent>
         </Card>
       ) : null}
 
-      {/* 显示数据源概览 */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        {files.map((file) => (
-          <Card key={file.id}>
-            <CardContent className="p-4">
-              <div className="flex items-center gap-3">
-                <FileSpreadsheet className="w-8 h-8 text-green-600" />
-                <div className="flex-1 min-w-0">
-                  <p className="font-medium text-gray-900 truncate">{file.name}</p>
-                  <p className="text-sm text-gray-500">{file.rowCount.toLocaleString()} 行 · {file.headers.length} 列</p>
-                </div>
-                <Badge>{getTableTypeLabel(file.tableInfo.type)}</Badge>
-              </div>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
+      {/* 数据源概览 */}
+      <DataSourceOverview files={files} />
     </div>
+  );
+}
+
+// 格式化分析结果
+function formatAnalysisResult(result: string): string {
+  return result
+    .replace(/\n/g, '<br/>')
+    .replace(/#{1,6}\s+(.+)/g, '<h3 class="text-lg font-bold mt-6 mb-3 text-gray-900 border-b pb-2">$1</h3>')
+    .replace(/\*\*(.+?)\*\*/g, '<strong class="text-gray-900">$1</strong>')
+    .replace(/\*(.+?)\*/g, '<em>$1</em>')
+    .replace(/-\s+(.+)/g, '<li class="ml-4 mb-1">$1</li>')
+    .replace(/(\d+\.\s+.+)/g, '<div class="font-medium text-gray-800 mt-3 mb-2">$1</div>');
+}
+
+// 计算统计数据
+function calculateStats(files: UploadedFile[], templateId: string) {
+  const allData = files.flatMap(f => f.data);
+  const headers = files[0]?.headers || [];
+  
+  // 通用统计
+  const totalRecords = allData.length;
+  
+  // 根据模板类型计算不同指标
+  switch (templateId) {
+    case 'member-lifecycle':
+      return calculateMemberStats(allData, headers);
+    case 'revenue-dashboard':
+      return calculateRevenueStats(allData, headers);
+    case 'coach-performance':
+      return calculateCoachStats(allData, headers);
+    case 'venue-utilization':
+      return calculateVenueStats(allData, headers);
+    default:
+      return { totalRecords };
+  }
+}
+
+// 会员生命周期统计
+function calculateMemberStats(data: any[], headers: string[]) {
+  const statusIdx = headers.findIndex(h => h.includes('状态') || h.includes('status') || h.includes('预约状态'));
+  const typeIdx = headers.findIndex(h => h.includes('类型') || h.includes('课程类型') || h.includes('type'));
+  const amountIdx = headers.findIndex(h => h.includes('金额') || h.includes('价格') || h.includes('amount'));
+  
+  const statusCounts: Record<string, number> = {};
+  const typeCounts: Record<string, number> = {};
+  let totalAmount = 0;
+  let completedCount = 0;
+  let cancelledCount = 0;
+  
+  data.forEach(row => {
+    if (statusIdx >= 0) {
+      const status = row[statusIdx];
+      statusCounts[status] = (statusCounts[status] || 0) + 1;
+      if (status?.includes('完成') || status?.includes('已签到')) completedCount++;
+      if (status?.includes('取消')) cancelledCount++;
+    }
+    if (typeIdx >= 0) {
+      const type = row[typeIdx];
+      typeCounts[type] = (typeCounts[type] || 0) + 1;
+    }
+    if (amountIdx >= 0) {
+      const amount = parseFloat(row[amountIdx]) || 0;
+      totalAmount += amount;
+    }
+  });
+  
+  return {
+    totalRecords: data.length,
+    statusCounts,
+    typeCounts,
+    totalAmount,
+    completedCount,
+    cancelledCount,
+    completionRate: data.length > 0 ? Math.round((completedCount / data.length) * 100) : 0,
+  };
+}
+
+// 营收统计
+function calculateRevenueStats(data: any[], headers: string[]) {
+  const amountIdx = headers.findIndex(h => h.includes('金额') || h.includes('价格') || h.includes('amount') || h.includes('实收'));
+  const typeIdx = headers.findIndex(h => h.includes('类型') || h.includes('课程类型'));
+  const dateIdx = headers.findIndex(h => h.includes('日期') || h.includes('时间') || h.includes('date'));
+  
+  let totalRevenue = 0;
+  const revenueByType: Record<string, number> = {};
+  const revenueByDate: Record<string, number> = {};
+  
+  data.forEach(row => {
+    const amount = amountIdx >= 0 ? parseFloat(row[amountIdx]) || 0 : 0;
+    totalRevenue += amount;
+    
+    if (typeIdx >= 0) {
+      const type = row[typeIdx] || '其他';
+      revenueByType[type] = (revenueByType[type] || 0) + amount;
+    }
+    
+    if (dateIdx >= 0) {
+      const date = row[dateIdx]?.split(' ')[0] || '未知';
+      revenueByDate[date] = (revenueByDate[date] || 0) + amount;
+    }
+  });
+  
+  return {
+    totalRecords: data.length,
+    totalRevenue,
+    revenueByType,
+    revenueByDate,
+    avgOrderValue: data.length > 0 ? totalRevenue / data.length : 0,
+  };
+}
+
+// 教练绩效统计
+function calculateCoachStats(data: any[], headers: string[]) {
+  const coachIdx = headers.findIndex(h => h.includes('教练') || h.includes('老师') || h.includes('coach'));
+  const statusIdx = headers.findIndex(h => h.includes('状态') || h.includes('status'));
+  
+  const coachStats: Record<string, { count: number; completed: number }> = {};
+  
+  data.forEach(row => {
+    if (coachIdx >= 0) {
+      const coach = row[coachIdx] || '未知教练';
+      if (!coachStats[coach]) {
+        coachStats[coach] = { count: 0, completed: 0 };
+      }
+      coachStats[coach].count++;
+      
+      if (statusIdx >= 0) {
+        const status = row[statusIdx];
+        if (status?.includes('完成') || status?.includes('已签到')) {
+          coachStats[coach].completed++;
+        }
+      }
+    }
+  });
+  
+  return {
+    totalRecords: data.length,
+    coachStats,
+    coachCount: Object.keys(coachStats).length,
+  };
+}
+
+// 场地利用率统计
+function calculateVenueStats(data: any[], headers: string[]) {
+  const timeIdx = headers.findIndex(h => h.includes('时间') || h.includes('时段') || h.includes('time'));
+  const statusIdx = headers.findIndex(h => h.includes('状态') || h.includes('status'));
+  
+  const hourCounts: Record<string, number> = {};
+  let bookedCount = 0;
+  let completedCount = 0;
+  
+  data.forEach(row => {
+    if (timeIdx >= 0) {
+      const time = row[timeIdx];
+      const hour = time?.split(':')[0] || '未知';
+      hourCounts[hour] = (hourCounts[hour] || 0) + 1;
+    }
+    
+    if (statusIdx >= 0) {
+      const status = row[statusIdx];
+      if (status?.includes('预约') || status?.includes('已预约')) bookedCount++;
+      if (status?.includes('完成') || status?.includes('已签到')) completedCount++;
+    }
+  });
+  
+  return {
+    totalRecords: data.length,
+    hourCounts,
+    bookedCount,
+    completedCount,
+    utilizationRate: data.length > 0 ? Math.round((completedCount / data.length) * 100) : 0,
+  };
+}
+
+// KPI 指标卡片组件
+function KPIGrid({ stats, templateId }: { stats: any; templateId: string }) {
+  const getKPIs = () => {
+    switch (templateId) {
+      case 'member-lifecycle':
+        return [
+          { label: '总记录数', value: stats.totalRecords?.toLocaleString() || '0', color: 'bg-blue-500', icon: '👥' },
+          { label: '已完成', value: stats.completedCount?.toLocaleString() || '0', color: 'bg-green-500', icon: '✅' },
+          { label: '已取消', value: stats.cancelledCount?.toLocaleString() || '0', color: 'bg-red-500', icon: '❌' },
+          { label: '完成率', value: `${stats.completionRate || 0}%`, color: 'bg-purple-500', icon: '📊' },
+        ];
+      case 'revenue-dashboard':
+        return [
+          { label: '总收入', value: `¥${(stats.totalRevenue || 0).toLocaleString()}`, color: 'bg-green-500', icon: '💰' },
+          { label: '订单数', value: stats.totalRecords?.toLocaleString() || '0', color: 'bg-blue-500', icon: '📋' },
+          { label: '客单价', value: `¥${Math.round(stats.avgOrderValue || 0).toLocaleString()}`, color: 'bg-purple-500', icon: '💵' },
+          { label: '收入类型', value: `${Object.keys(stats.revenueByType || {}).length} 种`, color: 'bg-orange-500', icon: '📈' },
+        ];
+      case 'coach-performance':
+        return [
+          { label: '总课程数', value: stats.totalRecords?.toLocaleString() || '0', color: 'bg-blue-500', icon: '🏃' },
+          { label: '教练人数', value: stats.coachCount?.toString() || '0', color: 'bg-green-500', icon: '👨‍🏫' },
+          { label: '人均课程', value: stats.coachCount ? Math.round(stats.totalRecords / stats.coachCount) : 0, color: 'bg-purple-500', icon: '📊' },
+          { label: '完成率', value: `${stats.completionRate || 0}%`, color: 'bg-orange-500', icon: '✨' },
+        ];
+      case 'venue-utilization':
+        return [
+          { label: '总预约', value: stats.totalRecords?.toLocaleString() || '0', color: 'bg-blue-500', icon: '📅' },
+          { label: '已完成', value: stats.completedCount?.toLocaleString() || '0', color: 'bg-green-500', icon: '✅' },
+          { label: '利用率', value: `${stats.utilizationRate || 0}%`, color: 'bg-purple-500', icon: '📊' },
+          { label: '高峰时段', value: `${Object.keys(stats.hourCounts || {}).length} 个`, color: 'bg-orange-500', icon: '⏰' },
+        ];
+      default:
+        return [];
+    }
+  };
+
+  const kpis = getKPIs();
+
+  return (
+    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+      {kpis.map((kpi, idx) => (
+        <Card key={idx} className="overflow-hidden">
+          <CardContent className="p-4">
+            <div className="flex items-start justify-between">
+              <div>
+                <p className="text-sm text-gray-500">{kpi.label}</p>
+                <p className="text-2xl font-bold text-gray-900 mt-1">{kpi.value}</p>
+              </div>
+              <div className={`w-10 h-10 ${kpi.color} rounded-lg flex items-center justify-center text-white text-lg`}>
+                {kpi.icon}
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      ))}
+    </div>
+  );
+}
+
+// 分析图表组件
+function AnalysisCharts({ stats, templateId }: { stats: any; templateId: string }) {
+  const renderChart = () => {
+    switch (templateId) {
+      case 'member-lifecycle':
+        return <StatusDistributionChart data={stats.statusCounts} />;
+      case 'revenue-dashboard':
+        return <RevenueChart data={stats.revenueByType} total={stats.totalRevenue} />;
+      case 'coach-performance':
+        return <CoachChart data={stats.coachStats} />;
+      case 'venue-utilization':
+        return <HourlyChart data={stats.hourCounts} />;
+      default:
+        return null;
+    }
+  };
+
+  return (
+    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      {renderChart()}
+      {templateId === 'member-lifecycle' && stats.typeCounts && (
+        <TypeDistributionChart data={stats.typeCounts} />
+      )}
+      {templateId === 'revenue-dashboard' && stats.revenueByDate && (
+        <TrendChart data={stats.revenueByDate} />
+      )}
+    </div>
+  );
+}
+
+// 状态分布图表
+function StatusDistributionChart({ data }: { data: Record<string, number> }) {
+  const total = Object.values(data).reduce((a, b) => a + b, 0);
+  const colors: Record<string, string> = {
+    '已完成': 'bg-green-500',
+    '已签到': 'bg-green-500',
+    '已取消': 'bg-red-500',
+    '取消': 'bg-red-500',
+    '已预约': 'bg-blue-500',
+    '预约': 'bg-blue-500',
+  };
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="text-base">状态分布</CardTitle>
+      </CardHeader>
+      <CardContent>
+        <div className="space-y-3">
+          {Object.entries(data).map(([status, count]) => {
+            const percentage = total > 0 ? (count / total) * 100 : 0;
+            return (
+              <div key={status}>
+                <div className="flex justify-between text-sm mb-1">
+                  <span className="text-gray-600">{status}</span>
+                  <span className="font-medium">{count} ({percentage.toFixed(1)}%)</span>
+                </div>
+                <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
+                  <div 
+                    className={`h-full ${colors[status] || 'bg-gray-400'} rounded-full transition-all duration-500`}
+                    style={{ width: `${percentage}%` }}
+                  />
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+// 类型分布图表
+function TypeDistributionChart({ data }: { data: Record<string, number> }) {
+  const total = Object.values(data).reduce((a, b) => a + b, 0);
+  
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="text-base">类型分布</CardTitle>
+      </CardHeader>
+      <CardContent>
+        <div className="grid grid-cols-2 gap-4">
+          {Object.entries(data).map(([type, count], idx) => {
+            const percentage = total > 0 ? (count / total) * 100 : 0;
+            const colors = ['bg-blue-500', 'bg-green-500', 'bg-purple-500', 'bg-orange-500'];
+            return (
+              <div key={type} className="text-center p-3 bg-gray-50 rounded-lg">
+                <div className={`w-12 h-12 ${colors[idx % colors.length]} rounded-full mx-auto mb-2 flex items-center justify-center text-white font-bold`}>
+                  {percentage.toFixed(0)}%
+                </div>
+                <p className="text-sm font-medium text-gray-700">{type}</p>
+                <p className="text-xs text-gray-500">{count} 条</p>
+              </div>
+            );
+          })}
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+// 营收图表
+function RevenueChart({ data, total }: { data: Record<string, number>; total: number }) {
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="text-base">收入构成</CardTitle>
+      </CardHeader>
+      <CardContent>
+        <div className="space-y-3">
+          {Object.entries(data).map(([type, amount], idx) => {
+            const percentage = total > 0 ? (amount / total) * 100 : 0;
+            const colors = ['bg-green-500', 'bg-blue-500', 'bg-purple-500', 'bg-orange-500'];
+            return (
+              <div key={type}>
+                <div className="flex justify-between text-sm mb-1">
+                  <span className="text-gray-600">{type}</span>
+                  <span className="font-medium">¥{amount.toLocaleString()} ({percentage.toFixed(1)}%)</span>
+                </div>
+                <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
+                  <div 
+                    className={`h-full ${colors[idx % colors.length]} rounded-full transition-all duration-500`}
+                    style={{ width: `${percentage}%` }}
+                  />
+                </div>
+              </div>
+            );
+          })}
+        </div>
+        <div className="mt-4 pt-4 border-t">
+          <div className="flex justify-between">
+            <span className="text-gray-600">总收入</span>
+            <span className="text-xl font-bold text-green-600">¥{total.toLocaleString()}</span>
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+// 趋势图表
+function TrendChart({ data }: { data: Record<string, number> }) {
+  const entries = Object.entries(data).slice(-7); // 最近7天
+  const maxValue = Math.max(...entries.map(([, v]) => v), 1);
+  
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="text-base">收入趋势（最近7天）</CardTitle>
+      </CardHeader>
+      <CardContent>
+        <div className="flex items-end gap-2 h-32">
+          {entries.map(([date, value], idx) => {
+            const height = maxValue > 0 ? (value / maxValue) * 100 : 0;
+            return (
+              <div key={idx} className="flex-1 flex flex-col items-center gap-1">
+                <div 
+                  className="w-full bg-blue-500 rounded-t transition-all duration-500 hover:bg-blue-600"
+                  style={{ height: `${Math.max(height, 5)}%` }}
+                  title={`${date}: ¥${value.toLocaleString()}`}
+                />
+                <span className="text-xs text-gray-500">{date.slice(5)}</span>
+                <span className="text-xs font-medium">¥{(value / 1000).toFixed(1)}k</span>
+              </div>
+            );
+          })}
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+// 教练图表
+function CoachChart({ data }: { data: Record<string, { count: number; completed: number }> }) {
+  const sortedCoaches = Object.entries(data)
+    .sort(([, a], [, b]) => b.count - a.count)
+    .slice(0, 5);
+  
+  const maxCount = Math.max(...sortedCoaches.map(([, stats]) => stats.count), 1);
+  
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="text-base">教练工作量 TOP5</CardTitle>
+      </CardHeader>
+      <CardContent>
+        <div className="space-y-3">
+          {sortedCoaches.map(([coach, stats]) => {
+            const completionRate = stats.count > 0 ? (stats.completed / stats.count) * 100 : 0;
+            return (
+              <div key={coach}>
+                <div className="flex justify-between text-sm mb-1">
+                  <span className="text-gray-700 font-medium">{coach}</span>
+                  <span className="text-gray-500">{stats.count} 节课 ({completionRate.toFixed(0)}% 完成)</span>
+                </div>
+                <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
+                  <div 
+                    className="h-full bg-purple-500 rounded-full transition-all duration-500"
+                    style={{ width: `${(stats.count / maxCount) * 100}%` }}
+                  />
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+// 时段分布图表
+function HourlyChart({ data }: { data: Record<string, number> }) {
+  const sortedHours = Object.entries(data).sort(([a], [b]) => parseInt(a) - parseInt(b));
+  const maxCount = Math.max(...sortedHours.map(([, v]) => v), 1);
+  
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="text-base">时段分布</CardTitle>
+      </CardHeader>
+      <CardContent>
+        <div className="flex items-end gap-1 h-32 overflow-x-auto">
+          {sortedHours.map(([hour, count]) => {
+            const height = maxCount > 0 ? (count / maxCount) * 100 : 0;
+            return (
+              <div key={hour} className="flex-1 flex flex-col items-center gap-1 min-w-[40px]">
+                <div 
+                  className="w-full bg-orange-500 rounded-t transition-all duration-500 hover:bg-orange-600"
+                  style={{ height: `${Math.max(height, 5)}%` }}
+                  title={`${hour}:00 - ${count} 次`}
+                />
+                <span className="text-xs text-gray-500">{hour}h</span>
+                <span className="text-xs font-medium">{count}</span>
+              </div>
+            );
+          })}
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+// 数据源概览组件
+function DataSourceOverview({ files }: { files: UploadedFile[] }) {
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="text-base flex items-center gap-2">
+          <FileSpreadsheet className="w-4 h-4" />
+          数据源概览
+        </CardTitle>
+      </CardHeader>
+      <CardContent>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {files.map((file) => (
+            <div key={file.id} className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
+              <div className="w-10 h-10 bg-green-100 rounded-lg flex items-center justify-center">
+                <FileSpreadsheet className="w-5 h-5 text-green-600" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="font-medium text-gray-900 truncate text-sm">{file.name}</p>
+                <p className="text-xs text-gray-500">{file.rowCount.toLocaleString()} 行 · {file.headers.length} 列</p>
+              </div>
+              <Badge variant="outline">{getTableTypeLabel(file.tableInfo.type)}</Badge>
+            </div>
+          ))}
+        </div>
+      </CardContent>
+    </Card>
   );
 }
 
